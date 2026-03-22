@@ -1,0 +1,2 @@
+avg_key_interval,min_key_interval,max_key_interval,key_presses_count,avg_mouse_speed,min_mouse_speed,max_mouse_speed,mouse_moves_count,system_time,active_application,window_title,ip_address,public_ip,download_bytes,upload_bytes,city,country
+0.1,0.1,0.1,0.967741935483871,6.234191782764856,0.0,27.793755983534645,88.45161290322581,00:40:06,Visual Studio Code,active_collector.py - sentinelX - Visual Studio Code,192.168.56.1,197.120.79.137,9561.322580645161,6504.709677419355,Unknown,Unknown
