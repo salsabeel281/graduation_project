@@ -1,6 +1,7 @@
 import csv
 import asyncio
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Header, HTTPException, status
+
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from uuid import uuid4
@@ -10,16 +11,27 @@ from passlib.context import CryptContext
 
 from .database import engine, SessionLocal, Base
 from .models import BehaviorRecord, UserProfile, RiskLog, User
+from .auth import create_access_token, verify_access_token
+
+from fastapi.middleware.cors import CORSMiddleware
+
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ==============================
 # Password Hashing
 # ==============================
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use pbkdf2_sha256 instead of bcrypt to avoid the 72-byte limit
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
-def hash_password(password: str):
+def hash_password(password: str) -> str:
+    """Hash a password"""
     return pwd_context.hash(password)
 
-def verify_password(plain_password, hashed_password):
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against its hash"""
     return pwd_context.verify(plain_password, hashed_password)
 
 
@@ -27,6 +39,14 @@ def verify_password(plain_password, hashed_password):
 # FastAPI App
 # ==============================
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "https://yourfrontend.com"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 Base.metadata.create_all(bind=engine)
 
@@ -41,6 +61,24 @@ def get_db():
     finally:
         db.close()
 
+
+# ==============================
+# Auth Dependency
+# ==============================
+from fastapi import Header, HTTPException, status
+
+def get_current_user(token: str = Header(..., alias="Authorization"), db: Session = Depends(get_db)):
+    if token.startswith("Bearer "):
+        token = token[7:]  # remove "Bearer " prefix
+    user_id = verify_access_token(token)
+    if user_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    
+    return user
 
 # ==============================
 # Schemas
@@ -59,6 +97,10 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
 
+#login schema here
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
 
 # ==============================
 # Root
@@ -72,14 +114,15 @@ def root():
 # Get Users
 # ==============================
 @app.get("/users")
-def get_users(db: Session = Depends(get_db)):
+def get_users(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     return db.query(User).all()
-
-
 # ==============================
 # CSV PATH
 # ==============================
-CSV_FILE_PATH = r"C:\Users\hp\Desktop\sentinelX\raw_training_data.csv"
+CSV_FILE_PATH = r"D:\GRAD\raw_training_data.csv"
 
 last_processed_row = 0
 
@@ -107,7 +150,7 @@ async def monitor_csv():
                         avg_mouse_speed = float(row.get("avg_mouse_speed", 0))
                         country = row.get("country", "Unknown")
 
-                        user_id = "user1"
+                        user_id = "1"  # All data goes to user 1
 
                         db = SessionLocal()
 
@@ -180,7 +223,7 @@ async def monitor_csv():
                             db.add(risk_entry)
                             db.commit()
 
-                            print("Risk:", risk_score, status, action)
+                            logger.info(f"Risk: {risk_score}, Status: {status}")
 
                         db.close()
 
@@ -199,7 +242,10 @@ async def monitor_csv():
 # IMPORT + DETECT MANUAL
 # ==============================
 @app.post("/import-latest-record")
-def import_latest_record(db: Session = Depends(get_db)):
+def import_latest_record(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
 
     try:
         with open(CSV_FILE_PATH, "r", encoding="utf-8") as f:
@@ -217,7 +263,7 @@ def import_latest_record(db: Session = Depends(get_db)):
     avg_mouse_speed = float(latest.get("avg_mouse_speed", 0))
     country = latest.get("country", "Unknown")
 
-    user_id = "user1"
+    user_id = str(current_user.id)
 
     new_record = BehaviorRecord(
         id=str(uuid4()),
@@ -238,15 +284,21 @@ def import_latest_record(db: Session = Depends(get_db)):
 # ==============================
 # BASELINE
 # ==============================
-@app.post("/calculate-baseline/{user_id}")
-def calculate_baseline(user_id: str, db: Session = Depends(get_db)):
+@app.post("/calculate-baseline")
+def calculate_baseline(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user_id = str(current_user.id)
 
     records = db.query(BehaviorRecord).filter(
         BehaviorRecord.user_id == user_id
     ).all()
 
-    if not records:
-        return {"error": "No records found"}
+
+    # Combined check:
+    if len(records) < 2:
+        return {"error": f"Need at least 2 records to calculate baseline. You have {len(records)} records."}
 
     avg_key = sum(r.avg_key_interval for r in records) / len(records)
     avg_mouse = sum(r.avg_mouse_speed for r in records) / len(records)
@@ -282,29 +334,26 @@ def calculate_baseline(user_id: str, db: Session = Depends(get_db)):
 # ==============================
 # RISK LOGS
 # ==============================
-@app.get("/risk-logs/{user_id}")
-def get_risk_logs(user_id: str, db: Session = Depends(get_db)):
+@app.get("/risk-logs")
+def get_risk_logs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user_id = str(current_user.id)
 
     logs = db.query(RiskLog).filter(
         RiskLog.user_id == user_id
     ).order_by(RiskLog.timestamp.desc()).all()
 
     return logs
-
-
 # ==============================
 # USER SUMMARY
 # ==============================
-@app.get("/user-summary/{user_id}")
-def get_user_summary(user_id: str, db: Session = Depends(get_db)):
-
-    records = db.query(BehaviorRecord).filter(
-        BehaviorRecord.user_id == user_id
-    ).all()
-
-    logs = db.query(RiskLog).filter(
-        RiskLog.user_id == user_id
-    ).order_by(RiskLog.timestamp.desc()).all()
+@app.get("/user-summary")
+def get_user_summary(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    user_id = str(current_user.id)
+    records = db.query(BehaviorRecord).filter(BehaviorRecord.user_id == user_id).all()
+    logs = db.query(RiskLog).filter(RiskLog.user_id == user_id).order_by(RiskLog.timestamp.desc()).all()
 
     if not logs:
         return {
@@ -320,12 +369,14 @@ def get_user_summary(user_id: str, db: Session = Depends(get_db)):
         "average_risk": round(avg_risk, 2),
         "last_status": logs[0].status
     }
-
 # ==================================
 # SYSTEM DASHBOARD
 # ==================================
 @app.get("/system-dashboard")
-def system_dashboard(db: Session = Depends(get_db)):
+def system_dashboard(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
 
     total_users = db.query(User).count()
     total_records = db.query(BehaviorRecord).count()
@@ -355,7 +406,10 @@ def system_dashboard(db: Session = Depends(get_db)):
 # LATEST THREATS
 # ==================================
 @app.get("/latest-threats")
-def latest_threats(db: Session = Depends(get_db)):
+def latest_threats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
 
     logs = db.query(RiskLog).order_by(
         RiskLog.timestamp.desc()
@@ -376,7 +430,10 @@ def latest_threats(db: Session = Depends(get_db)):
 # TOP RISK USERS
 # ==================================
 @app.get("/top-risk-users")
-def top_risk_users(db: Session = Depends(get_db)):
+def top_risk_users(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
 
     users = db.query(RiskLog.user_id).distinct().all()
 
@@ -408,33 +465,50 @@ def top_risk_users(db: Session = Depends(get_db)):
 # ==============================
 @app.post("/register")
 def register(user: UserCreate, db: Session = Depends(get_db)):
-
     existing_user = db.query(User).filter(
-        (User.username == user.username) |
-        (User.email == user.email)
+        (User.username == user.username) | (User.email == user.email)
     ).first()
-
     if existing_user:
-        return {"error": "User exists"}
+        raise HTTPException(status_code=400, detail="User already exists")
 
     hashed_pw = hash_password(user.password)
-
     new_user = User(
         username=user.username,
         email=user.email,
         hashed_password=hashed_pw
     )
 
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    try:
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        print(f"Registered user: {new_user.username}, id: {new_user.id}")
+    except Exception as e:
+        db.rollback()
+        print(f"Register error: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     return {
         "message": "User registered",
         "user_id": new_user.id
     }
+# ==============================
+# LOGIN
+# ==============================
+@app.post("/login")
+def login(user: UserLogin, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.email == user.email).first()
 
+    if not db_user or not verify_password(user.password, db_user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
+    token = create_access_token(db_user.id)
+
+    return {
+        "message": "Login successful",
+        "access_token": token,
+        "token_type": "Bearer"
+    }
 # ==============================
 # START MONITOR
 # ==============================
