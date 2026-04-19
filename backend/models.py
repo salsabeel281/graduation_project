@@ -33,6 +33,7 @@ class RiskLog(Base):
     risk_score = Column(Integer)
     status = Column(String)
     alerts = Column(String)
+    location = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
 from sqlalchemy import Boolean
