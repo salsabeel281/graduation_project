@@ -23,6 +23,7 @@ class UserProfile(Base):
     avg_key_interval = Column(Float)
     avg_mouse_speed = Column(Float)
     total_samples = Column(Integer)
+    country = Column(String, default="Unknown")
 
 
 class RiskLog(Base):
@@ -34,6 +35,8 @@ class RiskLog(Base):
     status = Column(String)
     alerts = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)
+    location = Column(String)
+    
 
 from sqlalchemy import Boolean
 
@@ -46,4 +49,5 @@ class User(Base):
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    country = Column(String, default="Unknown")
 
