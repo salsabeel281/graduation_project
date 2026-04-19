@@ -1,95 +1,150 @@
 import time
 import csv
-from config import MONITOR_DURATION
+import joblib
+import pandas as pd
 
+from config import MONITOR_DURATION, SAVE_INTERVAL, FINGERPRINT_FILE
 from core.buffer import Buffer
 from collectors.input_collector import collect_input_event
 from collectors.active_collector import collect_active_application
 from collectors.network_collector import collect_network_info
 from collectors.location_collector import collect_location_info
-from config import SAVE_INTERVAL, FINGERPRINT_FILE
 
 buffer = Buffer()
+user_id = "user_1"
 
 # ===============================
-# Load Fingerprint
+# Load
 # ===============================
-
 def load_fingerprint():
-    try:
-        with open(FINGERPRINT_FILE, "r", encoding="utf-8") as f:
-            row = next(csv.DictReader(f))
-            fingerprint = {}
-
-            for k, v in row.items():
-                try:
-                    fingerprint[k] = float(v)
-                except:
-                    fingerprint[k] = v
-
-            return fingerprint
-    except:
-        return None
-
+    with open(FINGERPRINT_FILE, "r", encoding="utf-8") as f:
+        row = next(csv.DictReader(f))
+        return {k: float(v) if v.replace('.', '', 1).isdigit() else v for k, v in row.items()}
 
 fingerprint = load_fingerprint()
 
-if not fingerprint:
-    print("❌ No fingerprint found! Run training first.")
-    exit()
+if_model = joblib.load(f"models/{user_id}_if.pkl")
+svm_model = joblib.load(f"models/{user_id}_svm.pkl")
+lof_model = joblib.load(f"models/{user_id}_lof.pkl")
+feature_columns = joblib.load(f"models/{user_id}_columns.pkl")
 
-print("==========================================")
-print("START MONITORING (60 seconds)")
-print("==========================================")
+print("✅ Models + Features loaded")
 
 # ===============================
-# Threat Scoring Function
+# Baseline Update
 # ===============================
+def update_baseline(fp, record, alpha=0.05):
+    for key, val in record.items():
+        mk = key + "_mean"
+        sk = key + "_std"
 
-def calculate_threat_score(record, fingerprint):
+        if mk in fp:
+            try:
+                val = float(val)
+                fp[mk] = (1 - alpha) * fp[mk] + alpha * val
+                fp[sk] = (1 - alpha) * fp.get(sk, 0) + alpha * abs(val - fp[mk])
+            except:
+                pass
 
+# ===============================
+# Location
+# ===============================
+def location_score(record, fp):
     score = 0
 
-    # Numeric comparison
-    numeric_keys = [
-        "avg_key_interval",
-        "avg_mouse_speed",
-        "download_bytes",
-        "upload_bytes"
-    ]
+    if record.get("country") != fp.get("country"):
+        score += 2
 
-    for key in numeric_keys:
-        if key in fingerprint and key in record:
-            fp_val = float(fingerprint.get(key, 0))
-            rec_val = float(record.get(key, 0))
+    if record.get("isp") != fp.get("isp"):
+        score += 3
 
-            if fp_val != 0:
-                diff_ratio = abs(rec_val - fp_val) / fp_val
+    try:
+        if record.get("ip")[:6] != fp.get("ip")[:6]:
+            score += 3
+    except:
+        pass
 
-                if diff_ratio > 0.5:
-                    score += 20
-                elif diff_ratio > 0.3:
-                    score += 10
-
-    # Location check
-    if record.get("country") != fingerprint.get("country"):
-        print("⚠️ COUNTRY CHANGED!")
-        score += 40
-
-    return min(score, 100)
-
+    return score
 
 # ===============================
-# Monitoring Loop
+# ML Voting
 # ===============================
+def ml_voting(df):
+    votes = 0
 
+    if if_model.predict(df)[0] == -1:
+        votes += 1
+
+    if svm_model.predict(df)[0] == -1:
+        votes += 1
+
+    if lof_model.predict(df)[0] == -1:
+        votes += 1
+
+    return votes
+
+# ===============================
+# Score
+# ===============================
+def calculate_score(record, fp, memory):
+
+    rule_score = 0
+
+    for key in ["avg_key_interval", "avg_mouse_speed", "download_bytes", "upload_bytes"]:
+        if key + "_mean" in fp:
+            try:
+                mean = fp[key + "_mean"]
+                std = fp[key + "_std"]
+                val = float(record.get(key, 0))
+
+                if std > 0:
+                    diff = abs(val - mean)
+
+                    if diff > 2 * std:
+                        rule_score += 10
+                    elif diff > std:
+                        rule_score += 4
+            except:
+                pass
+
+    rule_score += location_score(record, fp)
+
+    # ML
+    df = pd.DataFrame([record])
+    df_numeric = df[feature_columns].fillna(0)
+
+    ml_score = 0
+    key_hash = str(df_numeric.values.tolist())
+
+    votes = ml_voting(df_numeric)
+
+    if votes > 0:
+        memory[key_hash] = memory.get(key_hash, 0) + 1
+
+        if memory[key_hash] > 3:
+            ml_score = 2
+        else:
+            ml_score = votes * 4
+
+    final_score = (0.5 * rule_score) + (0.5 * ml_score)
+
+    return min(final_score, 100)
+
+# ===============================
+# Loop
+# ===============================
 start = time.time()
-total_records = 0
-total_score = 0
+scores = []
+memory = {}
+
+print("==========================================")
+print("START MONITORING")
+print("==========================================")
+
 while time.time() - start < MONITOR_DURATION:
 
-
     record = {}
+
     record.update(collect_input_event())
     record.update(collect_active_application())
     record.update(collect_network_info())
@@ -98,31 +153,34 @@ while time.time() - start < MONITOR_DURATION:
     buffer.add(record)
     buffer.flush()
 
-    threat_score = calculate_threat_score(record, fingerprint)
+    s = calculate_score(record, fingerprint, memory)
 
-    total_score += threat_score
-    total_records += 1
+    scores.append(s)
+    if len(scores) > 5:
+        scores.pop(0)
 
-    print(f"Threat Score: {threat_score}")
+    smooth = sum(scores) / len(scores)
+
+    print(f"Score: {round(s,2)} | Smoothed: {round(smooth,2)}")
+
+    if smooth < 25:
+        update_baseline(fingerprint, record)
 
     time.sleep(SAVE_INTERVAL)
 
-
 # ===============================
-# Final Report
+# Final
 # ===============================
-
-average_score = total_score / total_records if total_records else 0
+avg = sum(scores) / len(scores)
 
 print("==========================================")
-print("MONITORING FINISHED")
-print("Average Threat Score:", round(average_score, 2))
+print("FINAL SCORE:", round(avg, 2))
 
-if average_score < 20:
-    print("✅ Behavior Normal (Low Risk)")
-elif average_score < 50:
-    print("⚠️ Medium Risk Detected")
+if avg < 25:
+    print("✅ LOW RISK")
+elif avg < 60:
+    print("⚠️ MEDIUM RISK")
 else:
-    print("❌ High Risk Behavior Detected")
+    print("❌ HIGH RISK")
 
 print("==========================================")
