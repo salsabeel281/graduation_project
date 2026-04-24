@@ -10,7 +10,7 @@ if __name__ == "__main__":
     login = LoginPage()
     register = RegisterPage(login)
 
-    login.register_page = register
+    login.register_page = register   # ✅ الربط الصح
 
     login.show()
 

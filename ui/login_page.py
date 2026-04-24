@@ -377,9 +377,9 @@ class LoginPage(QMainWindow):
     """Professional Login Window with Cyber Background"""
 
     def open_dashboard(self):
-        from ui.admin_dashboard import AdminDashboard  # لو موجودة عندك
+        from ui.admin_dashboard import MainWindow  # لو موجودة عندك
 
-        self.dashboard = AdminDashboard()
+        self.dashboard = MainWindow()
         self.dashboard.show()
         self.close()
     
@@ -707,6 +707,7 @@ class LoginPage(QMainWindow):
             if response.status_code == 200:
                 data = response.json()
                 token = data["access_token"]
+                role = data.get("role")  # 👈 الباك لازم يرجعه
 
                 # 💾 نحفظ التوكن (مهم جدًا)
                 with open("token.txt", "w") as f:
@@ -720,7 +721,15 @@ class LoginPage(QMainWindow):
 
 
                 # 🔥 هنا تفتحي الداشبورد
-                self.open_dashboard()
+                if role == "admin":
+                    from ui.admin_dashboard import AdminDashboard
+                    self.dashboard = AdminDashboard()
+                else:
+                    from ui.main_window import MainWindow   # 👈 اليوزر
+                    self.dashboard = MainWindow()
+
+                    self.dashboard.show()
+                    self.close()
 
             else:
                 QMessageBox.warning(
@@ -732,23 +741,6 @@ class LoginPage(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
         
-        if response.status_code == 200:
-            data = response.json()
-            token = data["access_token"]
-
-            with open("token.txt", "w") as f:
-                f.write(token)
-
-            QMessageBox.information(self, "Success", "Login successful 🎉")
-
-            self.open_dashboard()
-
-        else:
-            QMessageBox.warning(
-                self,
-                "Error",
-                 response.json().get("detail", "Login failed")
-            )
 
             
     def clear_fields(self):
