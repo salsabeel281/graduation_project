@@ -20,6 +20,7 @@ from fastapi import BackgroundTasks
 import smtplib
 from email.mime.text import MIMEText
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
+import hashlib
 
 from .database import engine, SessionLocal, Base
 from .models import BehaviorRecord, UserProfile, RiskLog, User
@@ -166,7 +167,6 @@ def hash_password(password: str):
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
-
 
 # ==============================
 # FastAPI App
@@ -796,6 +796,22 @@ def login(
 
     if not db_user or not verify_password(user.password, db_user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    profile = db.query(UserProfile).filter(
+        UserProfile.user_id == str(db_user.id)
+        ).first()
+    
+    if not profile:
+        new_profile = UserProfile(
+            user_id=str(db_user.id),
+            avg_key_interval=0,
+            avg_mouse_speed=0,
+            total_samples=0,
+            country=db_user.country if hasattr(db_user, "country") else "Unknown"
+            )
+
+        db.add(new_profile)
+        db.commit()
 
     # 🔒 check if account is frozen
     if db_user.is_frozen:
@@ -834,10 +850,14 @@ def login(
         active_monitors[user_id] = True
         user_states[user_id] = ACTIVE
         background_tasks.add_task(monitor_user, user_id)
+        
 
     return {
         "access_token": token,
-        "token_type": "Bearer"
+        "token_type": "Bearer",
+        "role": db_user.account_type,  # ← Add this line
+        "user_id": str(db_user.id),
+        "first_login": db_user.first_login is not None
     }
 # ==============================
 # START MONITOR
@@ -1016,7 +1036,7 @@ def verify_otp(data: OTPRequest):
 
     del otp_store[data.user_id]
 
-    user_access[data.user_id] = "full"
+    user_access[data.user_id] = ACTIVE
 
     return {"message": "User verified successfully"}
 
@@ -1059,3 +1079,31 @@ async def send_otp(user_id: str, db: Session = Depends(get_db)):
 
     return {"message": "OTP sent"}
 
+# ==============================
+# user profile endpoint
+# ==============================
+
+@app.get("/user-profile")
+def get_user_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    profile = db.query(UserProfile).filter(
+        UserProfile.user_id == str(current_user.id)
+    ).first()
+
+    if not profile:
+        return {
+            "message": "Profile not found",
+            "user_id": str(current_user.id),
+            "avg_key_interval": 0,
+            "avg_mouse_speed": 0,
+            "total_samples": 0
+        }
+
+    return {
+        "user_id": profile.user_id,
+        "avg_key_interval": profile.avg_key_interval,
+        "avg_mouse_speed": profile.avg_mouse_speed,
+        "total_samples": profile.total_samples
+    }

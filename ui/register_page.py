@@ -337,34 +337,6 @@ class RegisterPage(QMainWindow):
         with open("sentinelx_users.json", 'w') as f:
             json.dump(self.users_db, f, indent=4)
 
-    def handle_register(self):
-        import requests
-
-        data = {
-            "first_name": self.first_name_input.text(),
-            "last_name": self.last_name_input.text(),
-            "email": self.email_input.text(),
-            "password": self.password_input.text(),
-            "confirm_password": self.confirm_input.text(),
-            "city": self.location_input.text().split(",")[0].strip() if "," in self.location_input.text() else self.location_input.text(),
-            "country": self.location_input.text().split(",")[1].strip() if "," in self.location_input.text() else "",
-            "gender": self.selected_gender,
-            "department": self.department_combo.currentText(),
-            "account_type": "standard"
-        }
-
-        try:
-            response = requests.post("http://127.0.0.1:8000/register", json=data)
-
-            print(response.json())
-
-            if response.status_code == 200:
-                QMessageBox.information(self, "Success", "Account created successfully!")
-            else:
-                QMessageBox.warning(self, "Error", response.text)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
     
     def setup_ui(self):
         main_layout = QHBoxLayout(self.central_widget)

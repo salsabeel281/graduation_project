@@ -2,6 +2,7 @@ import time
 import csv
 import joblib
 import pandas as pd
+import numpy as np
 
 from config import MONITOR_DURATION, SAVE_INTERVAL, FINGERPRINT_FILE
 from core.buffer import Buffer
@@ -14,15 +15,21 @@ buffer = Buffer()
 user_id = "user_1"
 
 # ===============================
-# Load
+# Load Fingerprint
 # ===============================
 def load_fingerprint():
     with open(FINGERPRINT_FILE, "r", encoding="utf-8") as f:
         row = next(csv.DictReader(f))
-        return {k: float(v) if v.replace('.', '', 1).isdigit() else v for k, v in row.items()}
+        return {
+            k: float(v) if str(v).replace('.', '', 1).isdigit() else v
+            for k, v in row.items()
+        }
 
 fingerprint = load_fingerprint()
 
+# ===============================
+# Load Models
+# ===============================
 if_model = joblib.load(f"models/{user_id}_if.pkl")
 svm_model = joblib.load(f"models/{user_id}_svm.pkl")
 lof_model = joblib.load(f"models/{user_id}_lof.pkl")
@@ -47,7 +54,7 @@ def update_baseline(fp, record, alpha=0.05):
                 pass
 
 # ===============================
-# Location
+# Location Score
 # ===============================
 def location_score(record, fp):
     score = 0
@@ -59,7 +66,7 @@ def location_score(record, fp):
         score += 3
 
     try:
-        if record.get("ip")[:6] != fp.get("ip")[:6]:
+        if str(record.get("ip", ""))[:6] != str(fp.get("ip", ""))[:6]:
             score += 3
     except:
         pass
@@ -67,10 +74,13 @@ def location_score(record, fp):
     return score
 
 # ===============================
-# ML Voting
+# ML Voting (FIXED)
 # ===============================
 def ml_voting(df):
     votes = 0
+
+    # ✔️ تأكيد الشكل النهائي
+    df = pd.DataFrame(df, columns=feature_columns)
 
     if if_model.predict(df)[0] == -1:
         votes += 1
@@ -84,7 +94,7 @@ def ml_voting(df):
     return votes
 
 # ===============================
-# Score
+# Score Calculation (FULL FIX)
 # ===============================
 def calculate_score(record, fp, memory):
 
@@ -109,9 +119,16 @@ def calculate_score(record, fp, memory):
 
     rule_score += location_score(record, fp)
 
-    # ML
-    df = pd.DataFrame([record])
-    df_numeric = df[feature_columns].fillna(0)
+    # ===============================
+    # 🔥 FIX الحقيقي هنا
+    # ===============================
+    df_numeric = pd.DataFrame([record])
+
+    # ✔️ نفس الأعمدة ونفس الترتيب
+    df_numeric = df_numeric.reindex(columns=feature_columns, fill_value=0)
+
+    # ✔️ تأكيد النوع (مهم جدًا)
+    df_numeric = df_numeric.astype(float)
 
     ml_score = 0
     key_hash = str(df_numeric.values.tolist())
@@ -169,7 +186,7 @@ while time.time() - start < MONITOR_DURATION:
     time.sleep(SAVE_INTERVAL)
 
 # ===============================
-# Final
+# Final Result
 # ===============================
 avg = sum(scores) / len(scores)
 

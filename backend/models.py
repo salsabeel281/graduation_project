@@ -24,6 +24,7 @@ class UserProfile(Base):
     avg_key_interval = Column(Float)
     avg_mouse_speed = Column(Float)
     total_samples = Column(Integer)
+    country = Column(String)   # ✅ HERE (correct)
 
 
 class RiskLog(Base):
@@ -56,6 +57,8 @@ class User(Base):
     department = Column(String)
     account_type = Column(String)
     is_frozen = Column(Boolean, default=False)
+    first_login = Column(DateTime, nullable=True)  # ← Add this line
+
     
 
 class Notification(Base):

@@ -8,6 +8,7 @@ import json
 import sys
 import random
 import math
+from urllib import response
 import requests
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -18,6 +19,9 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, QPoint, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont, QPainter, QLinearGradient, QColor, QBrush, QPen, QPixmap, QRadialGradient
 from PyQt5.QtWidgets import QScrollArea
+
+from ui.main_window import MainWindow
+from ui.admin_dashboard import AdminDashboard
 
 class ElectronParticle:
     """Electron particle class for advanced animations"""
@@ -376,10 +380,8 @@ class ModernCheckBox(QCheckBox):
 class LoginPage(QMainWindow):
     """Professional Login Window with Cyber Background"""
 
-    def open_dashboard(self):
-        from ui.admin_dashboard import MainWindow  # لو موجودة عندك
-
-        self.dashboard = MainWindow()
+    def open_dashboard(self, token):
+        self.dashboard = MainWindow(token)
         self.dashboard.show()
         self.close()
     
@@ -705,7 +707,25 @@ class LoginPage(QMainWindow):
            )
 
             if response.status_code == 200:
+                print(response.status_code)
+                print(response.text)
+                
+                print("STATUS:", response.status_code)
+                print("TEXT:", response.text)
                 data = response.json()
+                
+                        # 🔍 DEBUG - Print everything to see what's coming
+                print("=== FULL RESPONSE ===")
+                print(data)
+                print("=====================")
+                print(f"Token: {data.get('access_token')}")
+                print(f"Role: {data.get('role')}")
+                print(f"All keys: {data.keys()}")
+        
+        # ... rest of your code
+
+                
+                
                 token = data["access_token"]
                 role = data.get("role")  # 👈 الباك لازم يرجعه
 
@@ -713,35 +733,24 @@ class LoginPage(QMainWindow):
                 with open("token.txt", "w") as f:
                     f.write(token)
 
-                QMessageBox.information(
-                    self,
-                    "Success",
-                    "Login successful 🎉"
-                )
-
-
-                # 🔥 هنا تفتحي الداشبورد
                 if role == "admin":
-                    from ui.admin_dashboard import AdminDashboard
-                    self.dashboard = AdminDashboard()
+                    self.dashboard = AdminDashboard(token)
                 else:
-                    from ui.main_window import MainWindow   # 👈 اليوزر
-                    self.dashboard = MainWindow()
-
-                    self.dashboard.show()
-                    self.close()
-
+                    self.dashboard = MainWindow(token)
+                
+                self.dashboard.show()
+                self.close()
+            
+            
             else:
                 QMessageBox.warning(
                     self,
                     "Error",
                     response.json().get("detail", "Login failed")
-                )
-
+                    )
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
-        
-
+            return
             
     def clear_fields(self):
         self.email_input.clear()

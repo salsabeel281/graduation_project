@@ -73,26 +73,30 @@ with open(FINGERPRINT_FILE, "w", newline="", encoding="utf-8") as f:
 print("✅ Fingerprint saved!")
 
 # ===============================
-# ML Training
+# ML Training (FIXED)
 # ===============================
 df = pd.DataFrame(records)
 
-df_numeric = df.select_dtypes(include=['int64', 'float64']).fillna(0)
+# ✔️ استخدم numeric columns بشكل ثابت
+df_numeric = df.select_dtypes(include=[np.number]).fillna(0)
 
-# 🔥 مهم جدًا (حل warning نهائي)
+# ✔️ احفظ نفس الـ features
 feature_columns = df_numeric.columns.tolist()
 joblib.dump(feature_columns, f"models/{user_id}_columns.pkl")
 
 if not df_numeric.empty:
     try:
+        # ================= IF =================
         if_model = IsolationForest(contamination=0.1, random_state=42)
         if_model.fit(df_numeric)
         joblib.dump(if_model, f"models/{user_id}_if.pkl")
 
+        # ================= SVM =================
         svm_model = OneClassSVM(nu=0.1, kernel="rbf")
         svm_model.fit(df_numeric)
         joblib.dump(svm_model, f"models/{user_id}_svm.pkl")
 
+        # ================= LOF =================
         lof_model = LocalOutlierFactor(n_neighbors=20, novelty=True)
         lof_model.fit(df_numeric)
         joblib.dump(lof_model, f"models/{user_id}_lof.pkl")
