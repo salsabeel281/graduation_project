@@ -13,16 +13,49 @@ from collectors.active_collector import collect_active_application
 from collectors.network_collector import collect_network_info
 from collectors.location_collector import collect_location_info
 from typing import Literal
+from fastapi import WebSocket, WebSocketDisconnect
+from .models import Notification
+from .models import SecurityLog
+from fastapi import BackgroundTasks
+import smtplib
+from email.mime.text import MIMEText
+from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 
 from .database import engine, SessionLocal, Base
 from .models import BehaviorRecord, UserProfile, RiskLog, User
 from fastapi import Header, HTTPException, status
 from datetime import timedelta
+import random
 
 security = HTTPBearer()
 blocked_users = {}
 active_monitors = {}
 blocked_tokens: set[str] = set()
+admin_connections = []
+user_states = {}
+medium_sessions = {}
+otp_store = {}
+
+ACTIVE = "active"
+SUSPENDED = "suspended"
+FROZEN = "frozen"
+MEDIUM = "medium"
+
+def generate_otp():
+    return str(random.randint(100000, 999999))
+
+
+async def send_otp_email(to_email: str, otp: str):
+    message = MessageSchema(
+        subject="SentinelX OTP Verification",
+        recipients=[to_email],
+        body=f"Your OTP code is: {otp}\nIt expires in 5 minutes.",
+        subtype="plain"
+    )
+
+    fm = FastMail(conf)
+    await fm.send_message(message)
+
 
 
 def load_fingerprint():
@@ -51,7 +84,6 @@ def get_db():
     finally:
         db.close()
 
-medium_sessions = {}
 # ==============================
 # Fake Token System
 # ==============================
@@ -118,6 +150,12 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="User not found")
 
     return user
+
+
+def get_admin_user(current_user: User = Depends(get_current_user)):
+    if current_user.account_type != "Administrator":
+        raise HTTPException(status_code=403, detail="Admins only")
+    return current_user
 # ==============================
 # Password Hashing
 # ==============================
@@ -164,6 +202,10 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
     remember_me: bool = False
+
+class OTPRequest(BaseModel):
+    user_id: str
+    otp: str
 
 
 
@@ -252,6 +294,11 @@ async def monitor_user(user_id):
     print(f"🔥 Monitor started for user: {user_id}")
 
     fingerprint = load_fingerprint()
+    db = SessionLocal()
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or user.is_frozen:
+        print(f"⛔ User {user_id} already frozen - stop monitor")
+        return
 
     if not fingerprint:
         print("❌ No fingerprint found")
@@ -261,6 +308,27 @@ async def monitor_user(user_id):
         db = SessionLocal()
 
         try:
+            # ==============================
+            # 🧠 STATE CHECK (NEW)
+            # ==============================
+            # 🔒 check DB first (source of truth)
+            user = db.query(User).filter(User.id == user_id).first()
+
+            if not user or user.is_frozen:
+                print(f"⛔ User {user_id} is frozen in DB - stopping monitor")
+                active_monitors.pop(user_id, None)
+                return
+            
+            user_state = user_states.get(user_id, ACTIVE)
+            if user_state == SUSPENDED:
+                print(f"⚠️ User {user_id} is SUSPENDED - slow monitoring")
+                await asyncio.sleep(10)
+            else:
+                await asyncio.sleep(5)
+
+            # ==============================
+            # Collect Data
+            # ==============================
             record = {}
             record.update(collect_input_event())
             record.update(collect_active_application())
@@ -322,6 +390,105 @@ async def monitor_user(user_id):
             elif risk_score >= 30:
                 status = "Medium"
 
+            if status == "Medium":
+
+                print(f"⚠️ MEDIUM RISK DETECTED for {user_id}")
+
+                # 1. خزني session مؤقت
+                medium_sessions[user_id] = {
+                    "risk_score": risk_score,
+                    "alerts": alerts,
+                    "timestamp": datetime.utcnow(),
+                    "reason": alerts,
+                }
+
+                # 2. ابعتي notification
+                notif = Notification(
+                    id=str(uuid4()),
+                    user_id=user_id,
+                    message=f"Medium risk detected: verification required",
+                    status="unread"
+                )
+                db.add(notif)
+                db.commit()
+
+                # 3. ابعتي للأدمن
+                for conn in admin_connections:
+                    try:
+                        await conn.send_json({
+                            "user_id": user_id,
+                            "risk": risk_score,
+                            "status": "MEDIUM",
+                            "alerts": alerts
+                        })
+                    except:
+                        pass
+                otp = generate_otp()
+
+                otp_store[user_id] = {
+                        "otp": otp,
+                        "expires": datetime.utcnow() + timedelta(minutes=5)
+                }
+
+                user = db.query(User).filter(User.id == user_id).first()
+
+                if user:
+                        await send_otp_email(user.email, otp)
+
+
+            elif status == "High":
+
+                print(f"🚨 HIGH RISK DETECTED for {user_id}")
+
+                user = db.query(User).filter(User.id == user_id).first()
+
+                if user:
+                    user.is_frozen = True
+                    db.commit()
+
+                # block tokens
+                for token, data in list(fake_tokens.items()):
+                    if data["user_id"] == user_id:
+                        blocked_tokens.add(token)
+
+                # block user temporarily
+                blocked_users[user_id] = datetime.utcnow() + timedelta(minutes=5)
+
+                print(f"🛑 Stopping monitor for {user_id}")
+
+                return   # ⭐ أهم سطر
+
+            if status in ["High", "Medium"]:
+                notif = Notification(
+                    id=str(uuid4()),
+                    user_id=user_id,
+                    message=f"{status} risk detected: {alerts}",
+                    status="unread"
+                )
+                db.add(notif)
+                db.commit()
+
+            for conn in admin_connections:
+                try:
+                    await conn.send_json({
+                        "user_id": user_id,
+                        "risk": risk_score,
+                        "status": status,
+                        "alerts": alerts
+                    })
+                except:
+                    pass
+
+            # 📜 log
+            log = SecurityLog(
+                id=str(uuid4()),
+                user_id=user_id,
+                action="HIGH_RISK_TRIGGER",
+                details=f"Risk={risk_score}, Alerts={alerts}"
+            )
+            db.add(log)
+            db.commit()
+
             risk_entry = RiskLog(
                 user_id=user_id,
                 risk_score=risk_score,
@@ -342,6 +509,7 @@ async def monitor_user(user_id):
             db.close()
 
         await asyncio.sleep(5)
+
 # ==============================
 # IMPORT + DETECT MANUAL
 # ==============================
@@ -484,11 +652,12 @@ def system_dashboard(db: Session = Depends(get_db)):
     total_users = db.query(User).count()
     total_records = db.query(BehaviorRecord).count()
     total_risks = db.query(RiskLog).count()
+    active_users = len(active_monitors)
 
     high_risk = db.query(RiskLog).filter(RiskLog.status == "High").count()
     medium_risk = db.query(RiskLog).filter(RiskLog.status == "Medium").count()
     low_risk = db.query(RiskLog).filter(RiskLog.status == "Low").count()
-
+    
     if total_risks == 0:
         avg_risk = 0
     else:
@@ -497,6 +666,7 @@ def system_dashboard(db: Session = Depends(get_db)):
 
     return {
         "total_users": total_users,
+        "active_users": active_users,
         "total_behavior_records": total_records,
         "total_risks_detected": total_risks,
         "high_risk_events": high_risk,
@@ -614,13 +784,32 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 # ==============================
 # Login
 # ==============================
-@app.post("/login")
-def login(user: UserLogin, db: Session = Depends(get_db)):
+from fastapi import BackgroundTasks
 
+@app.post("/login")
+def login(
+    user: UserLogin,
+    background_tasks: BackgroundTasks,   
+    db: Session = Depends(get_db)
+):
     db_user = db.query(User).filter(User.email == user.email).first()
 
     if not db_user or not verify_password(user.password, db_user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    # 🔒 check if account is frozen
+    if db_user.is_frozen:
+        raise HTTPException(
+            status_code=403,
+            detail="Account is frozen. Contact admin."
+        )
+
+    # ⛔ MEDIUM RISK CHECK (IMPORTANT)
+    if db_user.id in medium_sessions:
+        return {
+            "message": "Verification required",
+            "status": "medium_risk"
+        }
 
     user_id = str(db_user.id)
 
@@ -639,9 +828,12 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     # ✅ هنا بس التعديل
     user_id = str(db_user.id)
     token = create_token(user_id, user.remember_me)
-    if user_id not in active_monitors:
+    if user_id in active_monitors:
+        print(f"⚠️ Monitor already running for {user_id}")
+    else:
         active_monitors[user_id] = True
-        asyncio.create_task(monitor_user(user_id))
+        user_states[user_id] = ACTIVE
+        background_tasks.add_task(monitor_user, user_id)
 
     return {
         "access_token": token,
@@ -654,31 +846,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
 async def start_monitor():
     print("🚀 System started")
     Base.metadata.create_all(bind=engine)
-
-
-@app.get("/medium-alert/{user_id}")
-def medium_alert(user_id: str):
-    if user_id not in medium_sessions:
-        return {"status": "safe"}
-
-    session = medium_sessions[user_id]
-
-    return {
-        "status": "MEDIUM_RISK",
-        "message": "We detected unusual behavior. Please verify it's you.",
-        "data": session
-    }
-
-@app.post("/verify-user/{user_id}")
-def verify_user(user_id: str):
-    if user_id in medium_sessions:
-        del medium_sessions[user_id]
-        return {
-            "status": "verified",
-            "message": "User confirmed, session restored"
-        }
-
-    return {"status": "no_verification_needed"}
+    Base.metadata.create_all(bind=engine)
 
 
 @app.post("/force-high/{user_id}")
@@ -687,8 +855,8 @@ def force_high(user_id: str):
     print("🚨 FORCE HIGH TRIGGERED")
 
     # 🔒 block tokens القديمة
-    for t, uid in fake_tokens.items():
-        if str(uid) == str(user_id):
+    for t, data in fake_tokens.items():
+        if data["user_id"] == str(user_id):
             blocked_tokens.add(t)
 
     # ⛔ block user نفسه 5 دقايق
@@ -697,4 +865,197 @@ def force_high(user_id: str):
     return {
         "message": f"High risk simulated for user {user_id}"
     }
+
+@app.get("/admin/users")
+def admin_get_users(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    return db.query(User).all()
+
+@app.delete("/admin/user/{user_id}")
+def delete_user(
+    user_id: str,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db.delete(user)
+    db.commit()
+
+    return {"message": "User deleted"}
+
+@app.post("/admin/block/{user_id}")
+def block_user(
+    user_id: str,
+    admin: User = Depends(get_admin_user)
+):
+    blocked_users[user_id] = datetime.utcnow() + timedelta(minutes=30)
+    return {"message": "User blocked"}
+
+@app.get("/admin/notifications")
+def get_notifications(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    return db.query(Notification).order_by(
+        Notification.created_at.desc()
+    ).all()
+
+@app.get("/admin/threats-last-7-days")
+def threats_last_7_days(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    result = []
+
+    for i in range(7):
+        day = datetime.utcnow() - timedelta(days=i)
+
+        count = db.query(RiskLog).filter(
+            RiskLog.timestamp >= day.replace(hour=0, minute=0),
+            RiskLog.timestamp < day.replace(hour=23, minute=59)
+        ).count()
+
+        result.append({
+            "date": day.strftime("%Y-%m-%d"),
+            "threats": count
+        })
+
+    return result[::-1]
+
+
+@app.websocket("/ws/admin")
+async def admin_ws(websocket: WebSocket):
+    await websocket.accept()
+    admin_connections.append(websocket)
+
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        admin_connections.remove(websocket)
+
+@app.get("/admin/frozen-users")
+def get_frozen_users(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    users = db.query(User).filter(User.is_frozen == True).all()
+    return users
+
+@app.get("/admin/user-logs/{user_id}")
+def get_user_logs(
+    user_id: str,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    logs = db.query(SecurityLog).filter(
+        SecurityLog.user_id == user_id
+    ).order_by(SecurityLog.timestamp.desc()).all()
+
+    return logs
+
+@app.post("/admin/unfreeze/{user_id}")
+def unfreeze_user(
+    user_id: str,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 🔓 Unfreeze (source of truth)
+    user.is_frozen = False
+    db.commit()
+
+    return {"message": "User unfrozen successfully"}
+
+@app.post("/verify-user/{user_id}")
+def verify_user(user_id: str):
+    if user_id in medium_sessions:
+        del medium_sessions[user_id]
+
+        return {
+            "status": "verified",
+            "message": "User confirmed, session restored"
+        }
+
+    return {"status": "no_verification_needed"}
+
+@app.get("/medium-alert/{user_id}")
+def medium_alert(user_id: str):
+    if user_id not in medium_sessions:
+        return {"status": "safe"}
+
+    return {
+        "status": "MEDIUM_RISK",
+        "message": "We detected unusual behavior. Please verify it's you.",
+        "data": medium_sessions[user_id]
+    }
+
+@app.post("/verify-otp")
+def verify_otp(data: OTPRequest):
+    record = otp_store.get(data.user_id)
+
+    if not record:
+        raise HTTPException(status_code=400, detail="No OTP found")
+
+    if datetime.utcnow() > record["expires"]:
+        raise HTTPException(status_code=400, detail="OTP expired")
+
+    if record["otp"] != data.otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    del otp_store[data.user_id]
+
+    user_access[data.user_id] = "full"
+
+    return {"message": "User verified successfully"}
+
+from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
+
+conf = ConnectionConfig(
+    MAIL_USERNAME="your_email@gmail.com",
+    MAIL_PASSWORD="your_app_password",
+    MAIL_FROM="your_email@gmail.com",
+    MAIL_PORT=587,
+    MAIL_SERVER="smtp.gmail.com",
+    MAIL_STARTTLS=True,
+    MAIL_SSL_TLS=False,
+    USE_CREDENTIALS=True
+)
+
+@app.post("/send-otp/{user_id}")
+async def send_otp(user_id: str, db: Session = Depends(get_db)):
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    otp = generate_otp()
+
+    otp_store[user_id] = {
+        "otp": otp,
+        "expires": datetime.utcnow() + timedelta(minutes=5)
+    }
+
+    message = MessageSchema(
+        subject="Your OTP Code",
+        recipients=[user.email],
+        body=f"Your OTP is: {otp}",
+        subtype="plain"
+    )
+
+    fm = FastMail(conf)
+    await fm.send_message(message)
+
+    return {"message": "OTP sent"}
 

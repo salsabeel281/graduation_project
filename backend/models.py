@@ -55,3 +55,23 @@ class User(Base):
     gender = Column(String)
     department = Column(String)
     account_type = Column(String)
+    is_frozen = Column(Boolean, default=False)
+    
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String)
+    message = Column(String)
+    status = Column(String)  # unread / read
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class SecurityLog(Base):
+    __tablename__ = "security_logs"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String)
+    action = Column(String)
+    details = Column(String)
+    timestamp = Column(DateTime, default=datetime.utcnow)
