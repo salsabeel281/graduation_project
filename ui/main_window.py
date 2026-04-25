@@ -187,7 +187,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SentinelX - Behavioral Threat Detection")
-        self.showMaximized()
+        self.resize(1400, 900)
         self.setStyleSheet("QMainWindow { background: #0B1643; }")
 
         central_widget = QWidget()
@@ -196,8 +196,6 @@ class MainWindow(QMainWindow):
         main_layout = QHBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 15, 0)
         main_layout.setSpacing(0)
-        main_layout.setStretch(0, 0)  # sidebar
-        main_layout.setStretch(4, 1)  # content
         
         # ========= Sidebar =========
         self.sidebar = SideBar()
@@ -245,8 +243,8 @@ class MainWindow(QMainWindow):
         
         # ===== Search Box (مع أيقونة SVG) =====
         search_container = QFrame()
-        search_container.setMinimumWidth(300)
-        search_container.setMinimumWidth(600)
+        search_container.setFixedWidth(450)
+        search_container.setFixedHeight(45)
         search_container.setStyleSheet("""
             QFrame {
                 background: rgba(255, 255, 255, 0.08);
