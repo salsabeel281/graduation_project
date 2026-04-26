@@ -1092,18 +1092,17 @@ def get_user_profile(
         UserProfile.user_id == str(current_user.id)
     ).first()
 
-    if not profile:
-        return {
-            "message": "Profile not found",
-            "user_id": str(current_user.id),
-            "avg_key_interval": 0,
-            "avg_mouse_speed": 0,
-            "total_samples": 0
-        }
-
     return {
-        "user_id": profile.user_id,
-        "avg_key_interval": profile.avg_key_interval,
-        "avg_mouse_speed": profile.avg_mouse_speed,
-        "total_samples": profile.total_samples
+        "first_name": current_user.first_name,
+        "last_name": current_user.last_name,
+        "email": current_user.email,
+        "department": current_user.department,
+        "account_type": current_user.account_type,
+        "city": current_user.city,
+        "country": current_user.country,
+
+        # behavior data
+        "avg_key_interval": profile.avg_key_interval if profile else 0,
+        "avg_mouse_speed": profile.avg_mouse_speed if profile else 0,
+        "total_samples": profile.total_samples if profile else 0
     }

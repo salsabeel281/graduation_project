@@ -1,5 +1,4 @@
 # ui/main_window.py
-import profile
 
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -194,7 +193,14 @@ class MainWindow(QMainWindow):
         self.token = token
         
         self.dashboard_service = UserDashboardService(self.token)
+        
+        self.profile_menu = ProfileSideMenu(self)
+        self.profile_menu.hide()
+
         self.user_data = self.dashboard_service.get_profile()
+        if self.user_data:
+            self.profile_menu.set_user_data(self.user_data)
+    
         self.setWindowTitle("SentinelX - Behavioral Threat Detection")
         self.resize(1400, 900)
         self.setStyleSheet("QMainWindow { background: #0B1643; }")
@@ -215,15 +221,12 @@ class MainWindow(QMainWindow):
         self.sidebar.support_clicked.connect(self.toggle_support_menu)
         
         # ========= Side Menus =========
-        self.profile_menu = ProfileSideMenu(self)
-        self.profile_menu.hide()
         
         self.activity_menu = RecentActivitySideMenu(self)
         self.activity_menu.hide()
         
         self.support_menu = SupportSideMenu(self)
         self.support_menu.hide()
-        
         # ========= Content Area (بدون سكرول) =========
         self.content_area = QWidget()
         self.content_area.setStyleSheet("background: #0B1643;")
@@ -352,6 +355,7 @@ class MainWindow(QMainWindow):
         # User Profile Section
         user_container = QFrame()
         user_container.setCursor(QCursor(Qt.PointingHandCursor))
+        user_container.mousePressEvent = lambda event: self.toggle_profile_menu()
         user_container.setStyleSheet("""
             QFrame {
                 background: transparent;
@@ -433,12 +437,13 @@ class MainWindow(QMainWindow):
         network_traffic = "0"
         error_rate = "0"
         
-        if hasattr(self, "user_data") and self.user_data:
-            profile = self.user_data
-            
     # =========================
     # CORE METRICS (REAL DATA)
     # =========================
+        
+        if hasattr(self, "user_data") and self.user_data:
+            profile = self.user_data or {}            
+            
         if profile.get("avg_key_interval"):
             typing_speed = str(round(1 / profile["avg_key_interval"], 2))
 
@@ -627,6 +632,8 @@ class MainWindow(QMainWindow):
                 self.activity_menu.hide_menu()
             if self.support_menu.isVisible():
                 self.support_menu.hide_menu()
+            data = self.profile_menu.load_user_profile(self.token)
+            self.profile_menu.set_user_data(data)
             self.profile_menu.show_menu()
 
     def toggle_activity_menu(self):

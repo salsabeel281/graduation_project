@@ -1,3 +1,5 @@
+import requests
+
 # ui/profile_sidemenu.py
 from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, 
@@ -22,16 +24,7 @@ class ProfileSideMenu(QFrame):
             }
         """)
         
-        self.user_data = {
-            "name": "Ahmed Mohamed",
-            "email": "ahmed@sentinelx.com",
-            "department": "Security Operations",
-            "job_title": "Security Analyst",
-            "phone": "+20 123 456 789",
-            "location": "Cairo, Egypt",
-            "bio": "Senior Security Analyst with 5+ years of experience in threat detection"
-        }
-        
+        self.user_data = {}
         self.profile_image_path = None
         self.is_editing = False
         self.fields = {}
@@ -39,6 +32,35 @@ class ProfileSideMenu(QFrame):
         self.init_ui()
         self.hide()
     
+    
+    def set_user_data(self, data):
+            print("SET USER DATA CALLED", data)
+            data = data or {}
+
+            self.user_data = {
+                "name": f"{data.get('first_name','')} {data.get('last_name','')}",
+                "email": data.get("email", ""),
+                "department": data.get("department", ""),
+                "job_title": data.get("account_type", ""),
+                "phone": data.get("phone", ""),
+                "location": f"{data.get('city','')}, {data.get('country','')}",
+                "bio": "User from database"
+                }
+            for key, field in self.fields.items():
+                if key in self.user_data:
+                    field['display'].setText(self.user_data[key])
+            
+            
+            
+            # self.refresh_fields()
+            
+    # def refresh_fields(self):
+    #         for i in reversed(range(self.layout().count())):
+    #             widget = self.layout().itemAt(i).widget()
+    #             if widget:
+    #                 widget.deleteLater()
+    #         self.init_ui()
+        
     def init_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -163,14 +185,14 @@ class ProfileSideMenu(QFrame):
         content_layout.addWidget(separator)
         
         # Fields
-        content_layout.addWidget(self.create_field("Full Name", self.user_data["name"], "name"))
-        content_layout.addWidget(self.create_field("Email", self.user_data["email"], "email"))
-        content_layout.addWidget(self.create_field("Department", self.user_data["department"], "department"))
-        content_layout.addWidget(self.create_field("Job Title", self.user_data["job_title"], "job_title"))
-        content_layout.addWidget(self.create_field("Phone", self.user_data["phone"], "phone"))
-        content_layout.addWidget(self.create_field("Location", self.user_data["location"], "location"))
+        content_layout.addWidget(self.create_field("Full Name", self.user_data.get("name", ""), "name"))
+        content_layout.addWidget(self.create_field("Email", self.user_data.get("email", ""), "email"))
+        content_layout.addWidget(self.create_field("Department", self.user_data.get("department", ""), "department"))
+        content_layout.addWidget(self.create_field("Job Title", self.user_data.get("job_title", ""), "job_title"))
+        content_layout.addWidget(self.create_field("Phone", self.user_data.get("phone", ""), "phone"))
+        content_layout.addWidget(self.create_field("Location", self.user_data.get("location", ""), "location"))
         content_layout.addWidget(self.create_field("Password", "••••••••", "password", is_password=True))
-        content_layout.addWidget(self.create_field("Bio", self.user_data["bio"], "bio", is_multiline=True))
+        content_layout.addWidget(self.create_field("Bio", self.user_data.get("bio", ""), "bio", is_multiline=True))
         
         # Edit button
         self.edit_btn = QPushButton("Edit profile")
@@ -280,6 +302,21 @@ class ProfileSideMenu(QFrame):
         
         return container
     
+    def load_user_profile(self, token):
+        try:
+            url = "http://127.0.0.1:8000/user-profile"
+            headers = {
+                "Authorization": f"Bearer {token}"
+                }
+            
+            response = requests.get(url, headers=headers)
+            data = response.json()
+            return data
+        
+        except Exception as e:
+            print("Error loading profile:", e)
+            return None
+    
     def create_default_avatar(self, size=76):
         pixmap = QPixmap(size, size)
         pixmap.fill(Qt.transparent)
@@ -292,7 +329,9 @@ class ProfileSideMenu(QFrame):
         painter.setBrush(QBrush(QColor(255, 255, 255)))
         painter.drawEllipse(size//3, size//4, size//3, size//3)
         painter.end()
-        return pixmap
+        return pixmap 
+    
+    
     
     def change_profile_image(self):
         file_path, _ = QFileDialog.getOpenFileName(
