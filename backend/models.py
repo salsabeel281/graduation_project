@@ -50,6 +50,8 @@ class User(Base):
     last_name = Column(String)
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
+    last_login = Column(DateTime, nullable=True)
+    session_start = Column(DateTime, nullable=True)
 
     city = Column(String)
     country = Column(String)

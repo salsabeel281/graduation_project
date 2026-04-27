@@ -23,6 +23,11 @@ from PyQt5.QtWidgets import QScrollArea
 from ui.main_window import MainWindow
 from ui.admin_dashboard import AdminDashboard
 
+import webbrowser
+import requests
+
+
+
 class ElectronParticle:
     """Electron particle class for advanced animations"""
     def __init__(self, x, y, size, speed_x, speed_y, color, orbit_center=None, orbit_radius=0):
@@ -380,6 +385,7 @@ class ModernCheckBox(QCheckBox):
 class LoginPage(QMainWindow):
     """Professional Login Window with Cyber Background"""
 
+
     def open_dashboard(self, token):
         self.dashboard = MainWindow(token)
         self.dashboard.show()
@@ -531,7 +537,7 @@ class LoginPage(QMainWindow):
 
         card_layout.addSpacing(10)
 
-# Password Field - بدون أي styling
+        # Password Field - بدون أي styling
         password_label = QLabel(" Enter Your Password")
         password_label.setContentsMargins(0, 15, 0, 5)
         password_label.setFont(QFont("Exo 2", 10))
@@ -582,11 +588,15 @@ class LoginPage(QMainWindow):
         card_layout.addWidget(divider_container)
         
         # Social Buttons
-        self.google_btn = SocialButton("Sign in with Google", "🄶")
-        self.google_btn.clicked.connect(self.login_with_google)
+        self.google_btn = SocialButton("Continue with Google", "🔵")
+        self.github_btn = SocialButton("Continue with GitHub", "⚫")
+
+        self.google_btn.clicked.connect(self.login_google)
+        self.github_btn.clicked.connect(self.login_github)
+
         card_layout.addWidget(self.google_btn)
+        card_layout.addWidget(self.github_btn)
         
-        card_layout.addSpacing(15)
         
         # Bottom Links
         bottom_container = QWidget()
@@ -698,13 +708,14 @@ class LoginPage(QMainWindow):
 
         try:
             response = requests.post(
-                 "http://127.0.0.1:8000/login",
+                "http://127.0.0.1:8000/login",
                 json={
                     "email": email,
                     "password": password,
                     "remember_me": self.keep_signed_check.isChecked()
-                }
-           )
+                },
+                timeout=10
+            )
 
             if response.status_code == 200:
                 print(response.status_code)
@@ -713,6 +724,14 @@ class LoginPage(QMainWindow):
                 print("STATUS:", response.status_code)
                 print("TEXT:", response.text)
                 data = response.json()
+                # ✅ لو في medium risk
+                if data.get("status") == "medium_risk":
+                    QMessageBox.warning(
+                        self,
+                        "Verification Required",
+                        "⚠️ Suspicious activity detected.\nPlease verify using OTP."
+                    )
+                    return
                 
                         # 🔍 DEBUG - Print everything to see what's coming
                 print("=== FULL RESPONSE ===")
@@ -726,14 +745,18 @@ class LoginPage(QMainWindow):
 
                 
                 
-                token = data["access_token"]
+                token = data.get("access_token")
+
+                if not token:
+                    QMessageBox.warning(self, "Error", "No token received from server")
+                    return
                 role = data.get("role")  # 👈 الباك لازم يرجعه
 
                 # 💾 نحفظ التوكن (مهم جدًا)
                 with open("token.txt", "w") as f:
                     f.write(token)
 
-                if role == "admin":
+                if role == "Administrator":
                     self.dashboard = AdminDashboard(token)
                 else:
                     self.dashboard = MainWindow(token)
@@ -835,6 +858,41 @@ class LoginPage(QMainWindow):
         super().resizeEvent(event)
         self.update_controls_position()
 
+    def login_google(self):
+        try:
+            response = requests.get(
+                "http://127.0.0.1:8000/auth/google/login",
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                auth_url = response.json()["url"]
+                webbrowser.open(auth_url)
+            else:
+                QMessageBox.warning(self, "Error", "Google login failed")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
+
+    def login_github(self):
+        try:
+            response = requests.get(
+                "http://127.0.0.1:8000/auth/github/login",
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                auth_url = response.json()["url"]
+                webbrowser.open(auth_url)
+            else:
+                QMessageBox.warning(self, "Error", "GitHub login failed")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
+    
+
 
 if __name__ == "__main__":
     random.seed()
@@ -850,3 +908,5 @@ if __name__ == "__main__":
     
     window.show()
     sys.exit(app.exec_())
+
+

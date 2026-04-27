@@ -695,6 +695,7 @@ class RegisterPage(QMainWindow):
         social_layout.setSpacing(10)
         
         google_btn = QPushButton("Google")
+        google_btn.clicked.connect(self.handle_google_login)
         google_btn.setMinimumHeight(38)
         google_btn.setStyleSheet("""
             QPushButton {
@@ -711,6 +712,7 @@ class RegisterPage(QMainWindow):
         """)
         
         github_btn = QPushButton("GitHub")
+        github_btn.clicked.connect(self.handle_github_login)
         github_btn.setMinimumHeight(38)
         github_btn.setStyleSheet("""
             QPushButton {
@@ -1094,6 +1096,63 @@ class RegisterPage(QMainWindow):
         self.update_controls_position()
 
 
+    def handle_google_login(self):
+        try:
+            url = "http://127.0.0.1:8000/auth/google/login"
+            response = requests.get(url)
+
+            auth_url = response.json().get("url")
+
+            import webbrowser
+            webbrowser.open(auth_url)
+
+            # هنا بس نستنى التوكن بطريقة بسيطة
+            self.check_token()
+
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
+
+    def handle_github_login(self):
+        try:
+            url = "http://127.0.0.1:8000/auth/github/login"
+            response = requests.get(url)
+
+            if response.status_code == 200:
+                auth_url = response.json().get("url")
+                import webbrowser
+                webbrowser.open(auth_url)
+            else:
+                QMessageBox.warning(self, "Error", "Failed to start GitHub login")
+
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
+
+    def check_token(self):
+        import time
+        import requests
+
+        for _ in range(30):
+            try:
+                res = requests.get("http://127.0.0.1:8000/send-token")
+                token = res.json().get("token")
+
+                if token:
+                    self.open_dashboard(token)
+                    return
+
+            except:
+                pass
+
+            time.sleep(1)
+
+        QMessageBox.warning(self, "Error", "Login failed or timeout")
+
+    def open_dashboard(self, token):
+        QMessageBox.information(self, "Success", "Logged in successfully 🎉")
+        print("JWT TOKEN:", token)
+        # هنا بعدين نفتح الداشبورد
+
+
 if __name__ == "__main__":
     random.seed()
     app = QApplication(sys.argv)
@@ -1108,3 +1167,5 @@ if __name__ == "__main__":
     
     window.show()
     sys.exit(app.exec_())
+
+    
