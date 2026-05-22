@@ -1,0 +1,13 @@
+prefix=d:/projecto/graduation_project/.conda/Library
+exec_prefix=d:/projecto/graduation_project/.conda/Library
+libdir=d:/projecto/graduation_project/.conda/Library/lib
+sharedlibdir=d:/projecto/graduation_project/.conda/Library/lib
+includedir=d:/projecto/graduation_project/.conda/Library/include
+
+Name: zlib
+Description: zlib compression library
+Version: 1.3.1
+
+Requires:
+Libs: -L${libdir} -L${sharedlibdir} -lz
+Cflags: -I${includedir}

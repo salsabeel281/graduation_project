@@ -750,13 +750,13 @@ class LoginPage(QMainWindow):
                 if not token:
                     QMessageBox.warning(self, "Error", "No token received from server")
                     return
-                role = data.get("role")  # 👈 الباك لازم يرجعه
+                role = data.get("role", "").strip().lower()  # 👈 الباك لازم يرجعه
 
                 # 💾 نحفظ التوكن (مهم جدًا)
                 with open("token.txt", "w") as f:
                     f.write(token)
 
-                if role == "Administrator":
+                if role in ("administrator", "admin"):
                     self.dashboard = AdminDashboard(token)
                 else:
                     self.dashboard = MainWindow(token)
