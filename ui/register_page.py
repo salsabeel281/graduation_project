@@ -772,30 +772,16 @@ class RegisterPage(QMainWindow):
         try:
             response = requests.post(url, json=data)
 
-            if response.status_code == 200:
-                QMessageBox.information(self, "Success", "Registered successfully 🎉")
-                self.handle_login()
-            else:
+            if response.status_code != 200:
                 QMessageBox.warning(self, "Error", response.text)
+                return
 
         except Exception as e:
             QMessageBox.warning(self, "Error", str(e))
             return
 
-        role_text = "Administrator" if self.selected_role == "admin" else "Standard User"
+        # role_text = "Administrator" if self.selected_role == "admin" else "Standard User"
         
-        QMessageBox.information(
-            self,
-            "Welcome to SentinelX! 🎉",
-            f"Account created successfully!\n\n"
-            f"Name: {full_name}\n"
-            f"Email: {email}\n"
-            f"Location: {location}\n"
-            f"Department: {department}\n"
-            f"Gender: {gender.capitalize()}\n"
-            f"Role: {role_text}\n"
-            f"Digital Signature: Generated"
-        )
         
         self.first_name_input.clear()
         self.last_name_input.clear()
