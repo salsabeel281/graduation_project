@@ -257,7 +257,7 @@ class ModernButton(QPushButton):
     
     def __init__(self, text, parent=None):
         super().__init__(text, parent)
-        self.setMinimumHeight(50)
+        self.setFixedHeight(50)
         self.setCursor(Qt.PointingHandCursor)
         self.setStyleSheet("""
             QPushButton {
@@ -276,6 +276,14 @@ class ModernButton(QPushButton):
                     stop:0 #00C8FF,
                     stop:1 #0096FF);
             }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #0078D4,
+                    stop:1 #00B4E6);
+            }
+            QPushButton:focus {
+                border: 2px solid #00FFFF;
+            }
         """)
         
         shadow = QGraphicsDropShadowEffect()
@@ -292,10 +300,10 @@ class RegisterPage(QMainWindow):
         super().__init__()
         self.setWindowTitle("SentinelX - Create Account")
         self.login_page = login_page
-        self.setMinimumSize(1300, 1000)
+        self.setMinimumSize(1100, 720)
         self.users_db = self.load_users()
         
-        #self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setWindowFlags(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         
         self.is_maximized = False
@@ -308,6 +316,31 @@ class RegisterPage(QMainWindow):
         self.setup_ui()
         self.setup_controls()
 
+        # Stylesheet for custom properties of option buttons (Gender & Role)
+        self.setStyleSheet("""
+            QPushButton[optionBtn="true"] {
+                background: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(0, 150, 255, 0.4);
+                border-radius: 10px;
+                padding: 10px;
+                color: rgba(255, 255, 255, 0.7);
+                font-weight: 500;
+                font-size: 12px;
+                font-family: 'Segoe UI', sans-serif;
+            }
+            QPushButton[optionBtn="true"]:hover {
+                background: rgba(0, 150, 255, 0.15);
+                color: white;
+            }
+            QPushButton[optionBtn="true"][selected="true"] {
+                background: #0096FF;
+                border: none;
+                color: white;
+                font-weight: 600;
+            }
+        """)
+
+        self.center_window()
         QTimer.singleShot(100, self.fix_focus)
 
     def fix_focus(self):
@@ -338,7 +371,8 @@ class RegisterPage(QMainWindow):
         main_layout.addWidget(left_widget, 3)
 
         right_widget = self.create_form_card()
-        right_widget.setFixedWidth(800)
+        right_widget.setMinimumWidth(450)
+        right_widget.setMaximumWidth(700)
 
         main_layout.addWidget(right_widget, 4)
     def create_left_section(self):
@@ -401,14 +435,13 @@ class RegisterPage(QMainWindow):
         stats_layout.addWidget(stat3)
         layout.addWidget(stats_container)
         
-    
-        
         return widget
-    
+        
     def create_form_card(self):
         card = QFrame()
+        card.setObjectName("formCard")
         card.setStyleSheet("""
-            QFrame {
+            QFrame#formCard {
                 background: rgba(10, 20, 40, 0.85);
                 border-radius: 24px;
                 border: 1px solid rgba(0, 150, 255, 0.3);
@@ -420,156 +453,137 @@ class RegisterPage(QMainWindow):
         shadow.setColor(QColor(0, 0, 0, 60))
         card.setGraphicsEffect(shadow)
         
-        layout = QVBoxLayout(card)
-        layout.setSpacing(22)
-        layout.setContentsMargins(40, 40, 40, 35)
-        layout.setSpacing(10)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(30, 30, 30, 25)
+        card_layout.setSpacing(5)
         
-        title = QLabel("  Create Account  ")         ######
+        title = QLabel("Create Account")
         title.setAlignment(Qt.AlignCenter)
-        title.setMinimumHeight(40)
         title.setFont(QFont("Segoe UI", 22, QFont.Bold))
-        title.setStyleSheet("color: white;")
-        layout.addWidget(title)
-        layout.addSpacing(15)
+        title.setStyleSheet("color: white; border: none; background: transparent;")
+        card_layout.addWidget(title)
         
         subtitle = QLabel("Build Your Own Digital Signature")
         subtitle.setFont(QFont("Segoe UI", 11))
         subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setMaximumHeight(25)
-
-        subtitle.setStyleSheet("""
-            color: rgba(255,255,255,0.6);
-            border: none;
-            background: transparent;
-        """)
-
-        layout.addWidget(subtitle)
-        layout.addSpacing(20)
+        subtitle.setStyleSheet("color: rgba(255, 255, 255, 0.6); border: none; background: transparent;")
+        card_layout.addWidget(subtitle)
         
-        # First Name and Last Name in same row
+        card_layout.addSpacing(15)
+        
+        # Scroll area for form responsiveness
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: rgba(0, 10, 20, 0.3);
+                width: 8px;
+                margin: 0px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(0, 150, 255, 0.4);
+                min-height: 20px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: rgba(0, 150, 255, 0.7);
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+            }
+            QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {
+                border: none;
+                background: none;
+            }
+        """)
+        
+        scroll_content = QWidget()
+        scroll_content.setStyleSheet("background: transparent;")
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(5, 5, 10, 5)
+        scroll_layout.setSpacing(12)
+        
+        # First Name and Last Name
         name_container = QWidget()
-
-        name_layout = QHBoxLayout()
+        name_container.setFixedHeight(50)
+        name_container.setStyleSheet("background: transparent;")
+        name_layout = QHBoxLayout(name_container)
         name_layout.setContentsMargins(0, 0, 0, 0)
         name_layout.setSpacing(15)
-
+        
         self.first_name_input = ModernInput("First Name")
         self.last_name_input = ModernInput("Last Name")
-
+        self.first_name_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.last_name_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        
         name_layout.addWidget(self.first_name_input)
         name_layout.addWidget(self.last_name_input)
-
-        name_container.setLayout(name_layout)
-
-        layout.addWidget(name_container)
-
-        layout.addSpacing(12)
+        scroll_layout.addWidget(name_container)
         
         # Email
         self.email_input = ModernInput("Email address")
-        layout.addWidget(self.email_input)
-        layout.addSpacing(18)
+        scroll_layout.addWidget(self.email_input)
         
         # Password
         self.password_input = ModernInput("Password")
         self.password_input.setEchoMode(QLineEdit.Password)
-        layout.addWidget(self.password_input)
-        layout.addSpacing(18)
-
+        scroll_layout.addWidget(self.password_input)
+        
         # Confirm Password
         self.confirm_input = ModernInput("Confirm password")
         self.confirm_input.setEchoMode(QLineEdit.Password)
-        layout.addWidget(self.confirm_input)
-        layout.addSpacing(18)
-
+        scroll_layout.addWidget(self.confirm_input)
+        
         # Location
         self.location_input = ModernInput("Location (City, Country)")
-        layout.addWidget(self.location_input)
-        layout.addSpacing(15)
+        scroll_layout.addWidget(self.location_input)
         
         # Gender
         gender_label = QLabel("Gender")
         gender_label.setFont(QFont("Segoe UI", 11, QFont.Bold))
         gender_label.setStyleSheet("color: rgba(255, 255, 255, 0.8); margin-top: 5px;")
-        layout.addWidget(gender_label)
+        scroll_layout.addWidget(gender_label)
         
         gender_container = QWidget()
+        gender_container.setStyleSheet("background: transparent;")
         gender_layout = QHBoxLayout(gender_container)
         gender_layout.setContentsMargins(0, 0, 0, 0)
-        gender_layout.setSpacing(14)
+        gender_layout.setSpacing(12)
         
         self.male_btn = QPushButton("Male")
-        self.male_btn.setCursor(Qt.PointingHandCursor)
-        self.male_btn.setMinimumHeight(42)
-        self.male_btn.setStyleSheet("""
-            QPushButton {
-                background: #0096FF;
-                border: none;
-                border-radius: 10px;
-                padding: 10px;
-                color: white;
-                font-weight: 600;
-                font-size: 12px;
-            }
-        """)
-        self.male_btn.clicked.connect(lambda: self.select_gender("male"))
-        
         self.female_btn = QPushButton("Female")
-        self.female_btn.setCursor(Qt.PointingHandCursor)
-        self.female_btn.setMinimumHeight(42)
-        self.female_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(0, 150, 255, 0.4);
-                border-radius: 10px;
-                padding: 10px;
-                color: rgba(255, 255, 255, 0.7);
-                font-weight: 500;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background: rgba(0, 150, 255, 0.15);
-            }
-        """)
-        self.female_btn.clicked.connect(lambda: self.select_gender("female"))
-        
         self.other_btn = QPushButton("Other")
-        self.other_btn.setCursor(Qt.PointingHandCursor)
-        self.other_btn.setMinimumHeight(42)
-        self.other_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(0, 150, 255, 0.4);
-                border-radius: 10px;
-                padding: 10px;
-                color: rgba(255, 255, 255, 0.7);
-                font-weight: 500;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background: rgba(0, 150, 255, 0.15);
-            }
-        """)
+        
+        for btn in [self.male_btn, self.female_btn, self.other_btn]:
+            btn.setProperty("optionBtn", "true")
+            btn.setFixedHeight(45)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            gender_layout.addWidget(btn)
+            
+        self.male_btn.clicked.connect(lambda: self.select_gender("male"))
+        self.female_btn.clicked.connect(lambda: self.select_gender("female"))
         self.other_btn.clicked.connect(lambda: self.select_gender("other"))
         
-        gender_layout.addWidget(self.male_btn)
-        gender_layout.addWidget(self.female_btn)
-        gender_layout.addWidget(self.other_btn)
-        layout.addWidget(gender_container)
-        
+        scroll_layout.addWidget(gender_container)
         self.selected_gender = "male"
-
-        layout.addSpacing(15)
-
+        
         # Department
         dept_label = QLabel("Department")
         dept_label.setFont(QFont("Segoe UI", 11, QFont.Bold))
         dept_label.setStyleSheet("color: rgba(255, 255, 255, 0.8); margin-top: 5px;")
-        layout.addWidget(dept_label)
+        scroll_layout.addWidget(dept_label)
         
         self.department_combo = QComboBox()
-        self.department_combo.setMinimumHeight(50)
+        self.department_combo.setFixedHeight(50)
         self.department_combo.setStyleSheet("""
             QComboBox {
                 background: rgba(0, 150, 255, 0.05);
@@ -608,269 +622,121 @@ class RegisterPage(QMainWindow):
             "Administration"
         ]
         self.department_combo.addItems(departments)
-        layout.addWidget(self.department_combo)
-
-        layout.addSpacing(12)
-
+        scroll_layout.addWidget(self.department_combo)
+        
         # Role selector
         role_label = QLabel("Select account type")
         role_label.setFont(QFont("Segoe UI", 11, QFont.Bold))
         role_label.setStyleSheet("color: rgba(255, 255, 255, 0.8); margin-top: 5px;")
-        layout.addWidget(role_label)
+        scroll_layout.addWidget(role_label)
         
         role_container = QWidget()
+        role_container.setStyleSheet("background: transparent;")
         role_layout = QHBoxLayout(role_container)
         role_layout.setContentsMargins(0, 0, 0, 0)
-        role_layout.setSpacing(18)
+        role_layout.setSpacing(12)
         
         self.user_btn = QPushButton("Standard User")
-        self.user_btn.setCursor(Qt.PointingHandCursor)
-        self.user_btn.setMinimumHeight(42)
-        self.user_btn.setStyleSheet("""
-            QPushButton {
-                background: #0096FF;
-                border: none;
-                border-radius: 10px;
-                padding: 10px;
-                color: white;
-                font-weight: 600;
-                font-size: 12px;
-            }
-        """)
-        self.user_btn.clicked.connect(lambda: self.select_role("user"))
-        
         self.admin_btn = QPushButton("Administrator")
-        self.admin_btn.setCursor(Qt.PointingHandCursor)
-        self.admin_btn.setMinimumHeight(42)
-        self.admin_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(0, 150, 255, 0.4);
-                border-radius: 10px;
-                padding: 10px;
-                color: rgba(255, 255, 255, 0.7);
-                font-weight: 500;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background: rgba(0, 150, 255, 0.15);
-            }
-        """)
+        
+        for btn in [self.user_btn, self.admin_btn]:
+            btn.setProperty("optionBtn", "true")
+            btn.setFixedHeight(45)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            role_layout.addWidget(btn)
+            
+        self.user_btn.clicked.connect(lambda: self.select_role("user"))
         self.admin_btn.clicked.connect(lambda: self.select_role("admin"))
         
-        role_layout.addWidget(self.user_btn)
-        role_layout.addWidget(self.admin_btn)
-        layout.addWidget(role_container)
-        
+        scroll_layout.addWidget(role_container)
         self.selected_role = "user"
         
-        layout.addSpacing(15)
+        scroll_layout.addSpacing(10)
         
-        # Register button
+        # Register button (Centered & Proportional)
         self.register_btn = ModernButton("Create Account →")
         self.register_btn.clicked.connect(self.handle_register)
-        layout.addWidget(self.register_btn)
         
+        register_btn_container = QWidget()
+        register_btn_container.setStyleSheet("background: transparent;")
+        register_btn_layout = QHBoxLayout(register_btn_container)
+        register_btn_layout.setContentsMargins(0, 0, 0, 0)
+        register_btn_layout.setAlignment(Qt.AlignCenter)
         
+        self.register_btn.setFixedWidth(320)
+        register_btn_layout.addWidget(self.register_btn)
+        scroll_layout.addWidget(register_btn_container)
         
-        layout.addSpacing(10)
-
+        # Sign-in link
         signin_container = QWidget()
+        signin_container.setStyleSheet("background: transparent;")
         signin_layout = QHBoxLayout(signin_container)
         signin_layout.setContentsMargins(0, 0, 0, 0)
         signin_layout.setSpacing(5)
         signin_layout.setAlignment(Qt.AlignCenter)
-
+        
         signin_text = QLabel("Already have an account?")
         signin_text.setFont(QFont("Segoe UI", 10))
-        signin_text.setStyleSheet("""
-            color: rgba(255, 255, 255, 0.6);
-            background: transparent;
-        """)
-
+        signin_text.setStyleSheet("color: rgba(255, 255, 255, 0.6); background: transparent;")
+        
         self.signin_link = QPushButton("Sign in")
         self.signin_link.setStyleSheet("""
             QPushButton {
-            background: transparent;
-            border: none;
-            color: #0096FF;
-            font-weight: 600;
-            font-size: 10px;
-            padding: 0px;
+                background: transparent;
+                border: none;
+                color: #0096FF;
+                font-weight: 600;
+                font-size: 11px;
+                padding: 0px;
             }
             QPushButton:hover {
-            color: #00C8FF;
-             }
+                color: #00C8FF;
+            }
         """)
-
         self.signin_link.setCursor(Qt.PointingHandCursor)
         self.signin_link.clicked.connect(self.handle_login)
-
+        
         signin_layout.addWidget(signin_text)
         signin_layout.addWidget(self.signin_link)
-
-        layout.addWidget(signin_container)
+        scroll_layout.addWidget(signin_container)
         
+        scroll_area.setWidget(scroll_content)
+        card_layout.addWidget(scroll_area)
         
-
-    
+        self.update_option_button_styles()
+        
         return card
         
-    
     def select_gender(self, gender):
         self.selected_gender = gender
-        if gender == "male":
-            self.male_btn.setStyleSheet("""
-                QPushButton {
-                    background: #0096FF;
-                    border: none;
-                    border-radius: 10px;
-                    padding: 10px;
-                    color: white;
-                    font-weight: 600;
-                    font-size: 12px;
-                }
-            """)
-            self.female_btn.setStyleSheet("""
-                QPushButton {
-                    background: rgba(255, 255, 255, 0.08);
-                    border: 1px solid rgba(0, 150, 255, 0.4);
-                    border-radius: 10px;
-                    padding: 10px;
-                    color: rgba(255, 255, 255, 0.7);
-                    font-weight: 500;
-                    font-size: 12px;
-                }
-            """)
-            self.other_btn.setStyleSheet("""
-                QPushButton {
-                    background: rgba(255, 255, 255, 0.08);
-                    border: 1px solid rgba(0, 150, 255, 0.4);
-                    border-radius: 10px;
-                    padding: 10px;
-                    color: rgba(255, 255, 255, 0.7);
-                    font-weight: 500;
-                    font-size: 12px;
-                }
-            """)
-        elif gender == "female":
-            self.female_btn.setStyleSheet("""
-                QPushButton {
-                    background: #0096FF;
-                    border: none;
-                    border-radius: 10px;
-                    padding: 10px;
-                    color: white;
-                    font-weight: 600;
-                    font-size: 12px;
-                }
-            """)
-            self.male_btn.setStyleSheet("""
-                QPushButton {
-                    background: rgba(255, 255, 255, 0.08);
-                    border: 1px solid rgba(0, 150, 255, 0.4);
-                    border-radius: 10px;
-                    padding: 10px;
-                    color: rgba(255, 255, 255, 0.7);
-                    font-weight: 500;
-                    font-size: 12px;
-                }
-            """)
-            self.other_btn.setStyleSheet("""
-                QPushButton {
-                    background: rgba(255, 255, 255, 0.08);
-                    border: 1px solid rgba(0, 150, 255, 0.4);
-                    border-radius: 10px;
-                    padding: 10px;
-                    color: rgba(255, 255, 255, 0.7);
-                    font-weight: 500;
-                    font-size: 12px;
-                }
-            """)
-        else:
-            self.other_btn.setStyleSheet("""
-                QPushButton {
-                    background: #0096FF;
-                    border: none;
-                    border-radius: 10px;
-                    padding: 10px;
-                    color: white;
-                    font-weight: 600;
-                    font-size: 12px;
-                }
-            """)
-            self.male_btn.setStyleSheet("""
-                QPushButton {
-                    background: rgba(255, 255, 255, 0.08);
-                    border: 1px solid rgba(0, 150, 255, 0.4);
-                    border-radius: 10px;
-                    padding: 10px;
-                    color: rgba(255, 255, 255, 0.7);
-                    font-weight: 500;
-                    font-size: 12px;
-                }
-            """)
-            self.female_btn.setStyleSheet("""
-                QPushButton {
-                    background: rgba(255, 255, 255, 0.08);
-                    border: 1px solid rgba(0, 150, 255, 0.4);
-                    border-radius: 10px;
-                    padding: 10px;
-                    color: rgba(255, 255, 255, 0.7);
-                    font-weight: 500;
-                    font-size: 12px;
-                }
-            """)
+        self.update_option_button_styles()
     
     def select_role(self, role):
         self.selected_role = role
-        if role == "user":
-            self.user_btn.setStyleSheet("""
-                QPushButton {
-                    background: #0096FF;
-                    border: none;
-                    border-radius: 10px;
-                    padding: 10px;
-                    color: white;
-                    font-weight: 600;
-                    font-size: 12px;
-                }
-            """)
-            self.admin_btn.setStyleSheet("""
-                QPushButton {
-                    background: rgba(255, 255, 255, 0.08);
-                    border: 1px solid rgba(0, 150, 255, 0.4);
-                    border-radius: 10px;
-                    padding: 10px;
-                    color: rgba(255, 255, 255, 0.7);
-                    font-weight: 500;
-                    font-size: 12px;
-                }
-            """)
-        else:
-            self.admin_btn.setStyleSheet("""
-                QPushButton {
-                    background: #0096FF;
-                    border: none;
-                    border-radius: 10px;
-                    padding: 10px;
-                    color: white;
-                    font-weight: 600;
-                    font-size: 12px;
-                }
-            """)
-            self.user_btn.setStyleSheet("""
-                QPushButton {
-                    background: rgba(255, 255, 255, 0.08);
-                    border: 1px solid rgba(0, 150, 255, 0.4);
-                    border-radius: 10px;
-                    padding: 10px;
-                    color: rgba(255, 255, 255, 0.7);
-                    font-weight: 500;
-                    font-size: 12px;
-                }
-            """)
-    
+        self.update_option_button_styles()
+        
+    def update_option_button_styles(self):
+        # Update gender buttons
+        self.male_btn.setProperty("selected", self.selected_gender == "male")
+        self.female_btn.setProperty("selected", self.selected_gender == "female")
+        self.other_btn.setProperty("selected", self.selected_gender == "other")
+        
+        # Update role buttons
+        self.user_btn.setProperty("selected", self.selected_role == "user")
+        self.admin_btn.setProperty("selected", self.selected_role == "admin")
+        
+        # Refresh styling
+        for btn in [self.male_btn, self.female_btn, self.other_btn, self.user_btn, self.admin_btn]:
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
+            
+    def center_window(self):
+        qr = self.frameGeometry()
+        cp = QDesktopWidget().availableGeometry().center()
+        qr.moveCenter(cp)
+        self.move(qr.topLeft())
+
     def handle_register(self):
         first_name = self.first_name_input.text().strip()
         last_name = self.last_name_input.text().strip()
