@@ -456,7 +456,6 @@ class LoginPage(QMainWindow):
         logo_text.setFont(QFont("Orbitron", 24, QFont.Bold))
         logo_text.setStyleSheet("color: #0066ff; letter-spacing: 3px; background: transparent;")
         
-        logo_layout.addWidget(logo_icon)
         logo_layout.addWidget(logo_text)
         header_layout.addWidget(logo_container)
         header_layout.addStretch()
@@ -480,8 +479,8 @@ class LoginPage(QMainWindow):
         login_card = QFrame()
         login_card.setMinimumWidth(700)
         login_card.setMaximumWidth(800)
-        login_card.setMinimumHeight(600)
-        login_card.setMaximumHeight(700)
+        login_card.setMinimumHeight(800)
+        login_card.setMaximumHeight(850)
         login_card.setStyleSheet("""
             QFrame {
                 background: rgba(10, 12, 25, 0.94);
@@ -497,22 +496,19 @@ class LoginPage(QMainWindow):
         login_card.setGraphicsEffect(shadow)
         
         card_layout = QVBoxLayout(login_card)
-        card_layout.setContentsMargins(45, 45, 45, 45)
-        card_layout.setSpacing(25)
+        card_layout.setContentsMargins(50, 55, 50, 55)
+        card_layout.setSpacing(24)
         
         # Title - Sign in (الصحيح)
         title_label = QLabel("Login to SentinelX")
-        title_label.setFont(QFont("Orbitron", 22, QFont.Bold))
+        title_label.setFont(QFont("Arial", 22, QFont.Bold))
         title_label.setAlignment(Qt.AlignCenter)
-
-        title_label.setMinimumHeight(70)
-        title_label.setWordWrap(True)
+        title_label.setMinimumHeight(50)
 
         title_label.setStyleSheet("""
             color: white;
             background: transparent;
-            padding: 12px;
-            margin: 0px;
+            border: none;
         """)
 
         card_layout.addWidget(title_label)
@@ -564,40 +560,8 @@ class LoginPage(QMainWindow):
         
         card_layout.addSpacing(15)
         
-        # Divider
-        divider_container = QWidget()
-        divider_layout = QHBoxLayout(divider_container)
-        divider_layout.setContentsMargins(0, 5, 0, 5)
-        
-        line_left = QFrame()
-        line_left.setFrameShape(QFrame.HLine)
-        line_left.setStyleSheet("background: rgba(0, 102, 255, 0.3); max-height: 1px; border-radius: 1px;")
-        divider_layout.addWidget(line_left, 1)
-        
-        or_label = QLabel("or")
-        or_label.setFont(QFont("Exo 2", 11))
-        or_label.setStyleSheet("color: rgba(255, 255, 255, 0.5); padding: 0 15px; background: transparent;")
-        or_label.setAlignment(Qt.AlignCenter)
-        divider_layout.addWidget(or_label)
-        
-        line_right = QFrame()
-        line_right.setFrameShape(QFrame.HLine)
-        line_right.setStyleSheet("background: rgba(0, 102, 255, 0.3); max-height: 1px; border-radius: 1px;")
-        divider_layout.addWidget(line_right, 1)
-        
-        card_layout.addWidget(divider_container)
-        
-        # Social Buttons
-        self.google_btn = SocialButton("Continue with Google", "🔵")
-        self.github_btn = SocialButton("Continue with GitHub", "⚫")
-
-        self.google_btn.clicked.connect(self.login_google)
-        self.github_btn.clicked.connect(self.login_github)
-
-        card_layout.addWidget(self.google_btn)
-        card_layout.addWidget(self.github_btn)
-        
-        
+       
+       
         # Bottom Links
         bottom_container = QWidget()
         bottom_layout = QHBoxLayout(bottom_container)

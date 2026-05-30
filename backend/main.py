@@ -59,9 +59,9 @@ from .models import BehaviorRecord, UserProfile, RiskLog, User, Notification, Se
 
 
 conf = ConnectionConfig(
-    MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
-    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
-    MAIL_FROM=os.getenv("MAIL_FROM"),
+    MAIL_USERNAME="test@gmail.com",
+    MAIL_PASSWORD="123456",
+    MAIL_FROM="test@gmail.com",
     MAIL_PORT=587,
     MAIL_SERVER="smtp.gmail.com",
     MAIL_STARTTLS=True,

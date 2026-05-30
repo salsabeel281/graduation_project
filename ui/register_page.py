@@ -106,8 +106,6 @@ class LiveDemoWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumHeight(550)
-        self.setMinimumHeight(42)
-        self.setMaximumHeight(48)
         self.setStyleSheet("""
             QWidget {
                 background: rgba(0, 20, 40, 0.85);
@@ -227,38 +225,33 @@ class LiveDemoWidget(QWidget):
 
 
 class ModernInput(QLineEdit):
-    """Modern input field"""
-    
     def __init__(self, placeholder="", parent=None):
         super().__init__(parent)
+        self.setGraphicsEffect(None)
+
         self.setPlaceholderText(placeholder)
-        self.setMinimumHeight(50)
-        self.setMinimumHeight(45)
-        self.setMaximumHeight(55)
-        self.setContentsMargins(0, 0, 0, 0)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+
+        self.setFixedHeight(50)
+
         self.setStyleSheet("""
             QLineEdit {
                 background: rgba(0, 150, 255, 0.05);
                 border: 1px solid rgba(0, 150, 255, 0.3);
                 border-radius: 14px;
-                padding: 12px 18px;
+
+                padding-left: 18px;
+                padding-right: 18px;
+
                 font-size: 14px;
                 color: white;
-                font-family: 'Segoe UI', sans-serif;
+                font-family: 'Segoe UI';
             }
+
             QLineEdit:focus {
                 border: 1px solid #0096FF;
                 background: rgba(0, 150, 255, 0.1);
             }
         """)
-        
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(10)
-        shadow.setColor(QColor(0, 0, 0, 40))
-        self.setGraphicsEffect(shadow)
-
-
 class ModernButton(QPushButton):
     """Modern button"""
     
@@ -299,9 +292,7 @@ class RegisterPage(QMainWindow):
         super().__init__()
         self.setWindowTitle("SentinelX - Create Account")
         self.login_page = login_page
-        screen = QDesktopWidget().screenGeometry()
-        self.resize(int(screen.width() * 0.9), int(screen.height() * 0.9))
-        
+        self.setMinimumSize(1300, 1000)
         self.users_db = self.load_users()
         
         #self.setWindowFlags(Qt.FramelessWindowHint)
@@ -340,30 +331,26 @@ class RegisterPage(QMainWindow):
     
     def setup_ui(self):
         main_layout = QHBoxLayout(self.central_widget)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(20)
+        main_layout.setContentsMargins(50, 70, 50, 50)
+        main_layout.setSpacing(40)
 
         left_widget = self.create_left_section()
-        right_widget = self.create_form_card()
-
-        # 🔥 حطيهم هنا مباشرة بعد الإنشاء
-        from PyQt5.QtWidgets import QSizePolicy
-
-        left_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        right_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
         main_layout.addWidget(left_widget, 3)
-        main_layout.addWidget(right_widget, 3)
+
+        right_widget = self.create_form_card()
+        right_widget.setFixedWidth(800)
+
+        main_layout.addWidget(right_widget, 4)
     def create_left_section(self):
         widget = QWidget()
         widget.setStyleSheet("background: transparent;")
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(10, 0, 10, 0)
-        layout.setSpacing(20)
+        layout.setSpacing(12)
         layout.setAlignment(Qt.AlignTop)
         
-        logo = QLabel("🫆 SENTINELX")
-        logo.setFont(QFont("Segoe UI", 38, QFont.Bold))
+        logo = QLabel("SENTINELX")
+        logo.setFont(QFont("Segoe UI", 32, QFont.Bold))
         logo.setStyleSheet("color: #0096FF; letter-spacing: 4px;")
         logo.setAlignment(Qt.AlignLeft)
         layout.addWidget(logo)
@@ -376,7 +363,7 @@ class RegisterPage(QMainWindow):
         layout.addSpacing(10)
         
         demo_title = QLabel(" Detect Insider Threats , protect your Data")
-        demo_title.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        demo_title.setFont(QFont("Segoe UI", 10, QFont.Bold))
         demo_title.setStyleSheet("color: #0096FF; letter-spacing: 2px;")
         demo_title.setAlignment(Qt.AlignCenter)
         layout.addWidget(demo_title)
@@ -401,6 +388,7 @@ class RegisterPage(QMainWindow):
         stat1.setStyleSheet("color: #00FFAA;")
         
         stat2 = QLabel("⚡ 0.2s Response")
+
         stat2.setFont(QFont("Segoe UI", 11))
         stat2.setStyleSheet("color: #0096FF;")
         
@@ -413,13 +401,7 @@ class RegisterPage(QMainWindow):
         stats_layout.addWidget(stat3)
         layout.addWidget(stats_container)
         
-        layout.addStretch()
-        
-        welcome = QLabel("Secure Your Digital Identity")
-        welcome.setFont(QFont("Segoe UI", 11, QFont.Bold))
-        welcome.setStyleSheet("color: white;")
-        welcome.setAlignment(Qt.AlignCenter)
-        layout.addWidget(welcome)
+    
         
         return widget
     
@@ -440,33 +422,46 @@ class RegisterPage(QMainWindow):
         
         layout = QVBoxLayout(card)
         layout.setSpacing(22)
-        layout.setContentsMargins(35, 35, 35, 40)
-        layout.setSpacing(22)
+        layout.setContentsMargins(40, 40, 40, 35)
+        layout.setSpacing(10)
         
-        title = QLabel("  Create Account  ")
-        title.setFont(QFont("Segoe UI", 28, QFont.Bold))
+        title = QLabel("  Create Account  ")         ######
+        title.setAlignment(Qt.AlignCenter)
+        title.setMinimumHeight(40)
+        title.setFont(QFont("Segoe UI", 22, QFont.Bold))
         title.setStyleSheet("color: white;")
         layout.addWidget(title)
+        layout.addSpacing(15)
         
-        subtitle = QLabel(" Build Your Own Digital Signature ")
-        subtitle.setFont(QFont("Segoe UI", 12))
-        subtitle.setStyleSheet("color: rgba(255, 255, 255, 0.6);")
+        subtitle = QLabel("Build Your Own Digital Signature")
+        subtitle.setFont(QFont("Segoe UI", 11))
+        subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setMaximumHeight(25)
+
+        subtitle.setStyleSheet("""
+            color: rgba(255,255,255,0.6);
+            border: none;
+            background: transparent;
+        """)
+
         layout.addWidget(subtitle)
-        
-        layout.addSpacing(30)
+        layout.addSpacing(20)
         
         # First Name and Last Name in same row
         name_container = QWidget()
-        name_layout = QHBoxLayout(name_container)
+
+        name_layout = QHBoxLayout()
         name_layout.setContentsMargins(0, 0, 0, 0)
-        name_layout.setSpacing(18)
-        
+        name_layout.setSpacing(15)
+
         self.first_name_input = ModernInput("First Name")
         self.last_name_input = ModernInput("Last Name")
-        
-        name_layout.addWidget(self.first_name_input, 1)
-        name_layout.addWidget(self.last_name_input, 1)
-        name_layout.setSpacing(12)
+
+        name_layout.addWidget(self.first_name_input)
+        name_layout.addWidget(self.last_name_input)
+
+        name_container.setLayout(name_layout)
+
         layout.addWidget(name_container)
 
         layout.addSpacing(12)
@@ -474,19 +469,19 @@ class RegisterPage(QMainWindow):
         # Email
         self.email_input = ModernInput("Email address")
         layout.addWidget(self.email_input)
-        layout.addSpacing(12)
+        layout.addSpacing(18)
         
         # Password
         self.password_input = ModernInput("Password")
         self.password_input.setEchoMode(QLineEdit.Password)
         layout.addWidget(self.password_input)
-        layout.addSpacing(12)
+        layout.addSpacing(18)
 
         # Confirm Password
         self.confirm_input = ModernInput("Confirm password")
         self.confirm_input.setEchoMode(QLineEdit.Password)
         layout.addWidget(self.confirm_input)
-        layout.addSpacing(12)
+        layout.addSpacing(18)
 
         # Location
         self.location_input = ModernInput("Location (City, Country)")
@@ -626,7 +621,7 @@ class RegisterPage(QMainWindow):
         role_container = QWidget()
         role_layout = QHBoxLayout(role_container)
         role_layout.setContentsMargins(0, 0, 0, 0)
-        role_layout.setSpacing(10)
+        role_layout.setSpacing(18)
         
         self.user_btn = QPushButton("Standard User")
         self.user_btn.setCursor(Qt.PointingHandCursor)
@@ -676,105 +671,50 @@ class RegisterPage(QMainWindow):
         self.register_btn.clicked.connect(self.handle_register)
         layout.addWidget(self.register_btn)
         
-        # Divider
-        divider = QFrame()
-        divider.setFrameShape(QFrame.HLine)
-        divider.setStyleSheet("background: rgba(0, 150, 255, 0.2); margin: 8px 0;")
-        layout.addWidget(divider)
         
-        # Social login
-        social_label = QLabel("Or continue with")
-        social_label.setFont(QFont("Segoe UI", 10))
-        social_label.setStyleSheet("color: rgba(255, 255, 255, 0.5);")
-        social_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(social_label)
         
-        social_buttons = QWidget()
-        social_layout = QHBoxLayout(social_buttons)
-        social_layout.setContentsMargins(0, 0, 0, 0)
-        social_layout.setSpacing(10)
-        
-        google_btn = QPushButton("Google")
-        google_btn.clicked.connect(self.handle_google_login)
-        google_btn.setMinimumHeight(38)
-        google_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(255, 255, 255, 0.07);
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                border-radius: 10px;
-                padding: 8px;
-                color: white;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background: rgba(255, 255, 255, 0.12);
-            }
-        """)
-        
-        github_btn = QPushButton("GitHub")
-        github_btn.clicked.connect(self.handle_github_login)
-        github_btn.setMinimumHeight(38)
-        github_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(255, 255, 255, 0.07);
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                border-radius: 10px;
-                padding: 8px;
-                color: white;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background: rgba(255, 255, 255, 0.12);
-            }
-        """)
-        
-        social_layout.addWidget(google_btn)
-        social_layout.addWidget(github_btn)
-        layout.addWidget(social_buttons)
-        
-        # Sign in link
+        layout.addSpacing(10)
+
         signin_container = QWidget()
         signin_layout = QHBoxLayout(signin_container)
-        signin_layout.setContentsMargins(0, 5, 0, 0)
+        signin_layout.setContentsMargins(0, 0, 0, 0)
+        signin_layout.setSpacing(5)
         signin_layout.setAlignment(Qt.AlignCenter)
-        
+
         signin_text = QLabel("Already have an account?")
         signin_text.setFont(QFont("Segoe UI", 10))
-        signin_text.setStyleSheet("color: rgba(255, 255, 255, 0.5);")
-        
+        signin_text.setStyleSheet("""
+            color: rgba(255, 255, 255, 0.6);
+            background: transparent;
+        """)
+
         self.signin_link = QPushButton("Sign in")
         self.signin_link.setStyleSheet("""
             QPushButton {
-                background: transparent;
-                border: none;
-                color: #0096FF;
-                font-weight: 600;
-                font-size: 10px;
+            background: transparent;
+            border: none;
+            color: #0096FF;
+            font-weight: 600;
+            font-size: 10px;
+            padding: 0px;
             }
             QPushButton:hover {
-                color: #00C8FF;
-            }
+            color: #00C8FF;
+             }
         """)
+
         self.signin_link.setCursor(Qt.PointingHandCursor)
         self.signin_link.clicked.connect(self.handle_login)
-        
+
         signin_layout.addWidget(signin_text)
         signin_layout.addWidget(self.signin_link)
+
         layout.addWidget(signin_container)
-
-        self.register_btn = ModernButton("Create Account")
-        self.register_btn.clicked.connect(self.handle_register)
-        layout.addWidget(self.register_btn)
-
-        layout.addStretch(1)
+        
         
 
-        scroll = QScrollArea()
-        scroll.setWidget(card)
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("border: none;")
-
-        return scroll
+    
+        return card
         
     
     def select_gender(self, gender):
@@ -1165,7 +1105,7 @@ if __name__ == "__main__":
     y = (screen.height() - 1000) // 2
     window.showMaximized()
     
-    window.show()
+   
     sys.exit(app.exec_())
 
     
