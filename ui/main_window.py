@@ -3,9 +3,9 @@
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QFrame, QProgressBar, QGridLayout,
-    QSizePolicy, QPushButton, QSpacerItem, QLineEdit
+    QSizePolicy, QPushButton, QSpacerItem, QLineEdit, QDialog
 )
-from PyQt5.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, QSize
+from PyQt5.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, QSize, QTimer
 from PyQt5.QtGui import QFont, QCursor, QPixmap, QPainter, QColor, QIcon
 import pyqtgraph as pg
 from datetime import datetime
@@ -16,6 +16,8 @@ from ui.sidebar import SideBar
 from ui.profile_sidemenu import ProfileSideMenu
 from ui.recent_activity_sidemenu import RecentActivitySideMenu
 from ui.support_sidemenu import SupportSideMenu
+from ui.training_dialog import TrainingDialog
+
 
 from backend.user_dashboard import UserDashboardService
 
@@ -30,8 +32,8 @@ class MetricWidget(QWidget):
         layout.setContentsMargins(0, 4, 0, 4)
         layout.setSpacing(4)
 
-        title_lbl = QLabel(title)
-        title_lbl.setStyleSheet("""
+        self.title_lbl = QLabel(title)
+        self.title_lbl.setStyleSheet("""
             QLabel {
                 background: transparent;
                 color: white;
@@ -39,14 +41,14 @@ class MetricWidget(QWidget):
                 font-weight: 600;
             }
         """)
-        title_lbl.setFont(QFont("Segoe UI", 13, QFont.Bold))
-        layout.addWidget(title_lbl)
+        self.title_lbl.setFont(QFont("Segoe UI", 13, QFont.Bold))
+        layout.addWidget(self.title_lbl)
 
         value_layout = QHBoxLayout()
         value_layout.setSpacing(4)
         
-        value_lbl = QLabel(value)
-        value_lbl.setStyleSheet("""
+        self.value_lbl = QLabel(str(value))
+        self.value_lbl.setStyleSheet("""
             QLabel {
                 background: transparent;
                 color: rgba(255, 255, 255, 0.6);
@@ -54,8 +56,8 @@ class MetricWidget(QWidget):
                 font-weight: 700;
             }
         """)
-        value_lbl.setFont(QFont("Segoe UI", 32, QFont.Bold))
-        value_layout.addWidget(value_lbl)
+        self.value_lbl.setFont(QFont("Segoe UI", 32, QFont.Bold))
+        value_layout.addWidget(self.value_lbl)
         
         unit_lbl = QLabel(unit)
         unit_lbl.setStyleSheet("""
@@ -72,12 +74,13 @@ class MetricWidget(QWidget):
         value_layout.addStretch()
         layout.addLayout(value_layout)
 
+        self.progress_bar = None
         if progress_value > 0:
-            progress_bar = QProgressBar()
-            progress_bar.setValue(progress_value)
-            progress_bar.setTextVisible(False)
-            progress_bar.setFixedHeight(2)
-            progress_bar.setStyleSheet("""
+            self.progress_bar = QProgressBar()
+            self.progress_bar.setValue(progress_value)
+            self.progress_bar.setTextVisible(False)
+            self.progress_bar.setFixedHeight(2)
+            self.progress_bar.setStyleSheet("""
                 QProgressBar {
                     background: rgba(255, 255, 255, 0.15);
                     border-radius: 1px;
@@ -88,7 +91,7 @@ class MetricWidget(QWidget):
                     border-radius: 1px;
                 }
             """)
-            layout.addWidget(progress_bar)
+            layout.addWidget(self.progress_bar)
 
         bottom_layout = QHBoxLayout()
         bottom_layout.setSpacing(6)
@@ -124,6 +127,12 @@ class MetricWidget(QWidget):
             bottom_layout.addWidget(change_lbl)
         
         layout.addLayout(bottom_layout)
+
+    def update_value(self, value, progress_value=None):
+        self.value_lbl.setText(str(value))
+        if progress_value is not None and self.progress_bar:
+            self.progress_bar.setValue(int(progress_value))
+
 
 
 class CustomPlotWidget(pg.PlotWidget):
@@ -420,184 +429,123 @@ class MainWindow(QMainWindow):
         dashboard_layout.addWidget(section_title)
         
         # =========================
-        # SAFE FALLBACK VALUES
+        # METRIC VALUES EXTRACTION
         # =========================
-        typing_speed = "0"
-        mouse_speed = "0"
-        keystroke_rhythm = "0"
-        click_frequency = "0"
-        anomaly_score = "0"
-        
-        app_focus_time = "0"
-        login_time = "N/A"
-        session_length = "0"
-        threats = "0"
-        
-        file_access = "0"
-        network_traffic = "0"
-        error_rate = "0"
-        
-    # =========================
-    # CORE METRICS (REAL DATA)
-    # =========================
-        
+        avg_key_interval = "0.0"
+        avg_mouse_speed = "0.0"
+        min_key_interval = "0.0"
+        max_key_interval = "0.0"
+        key_presses_count = "0"
+        min_mouse_speed = "0.0"
+        max_mouse_speed = "0.0"
+        mouse_moves_count = "0"
+        download_bytes = "0.0"
+        upload_bytes = "0.0"
+        active_application = "Unknown"
+        window_title = "Unknown"
+
         if hasattr(self, "user_data") and self.user_data:
             profile = self.user_data or {}            
-            
-        if profile.get("avg_key_interval"):
-            typing_speed = str(round(1 / profile["avg_key_interval"], 2))
+            avg_key = profile.get("avg_key_interval", 0.0)
+            avg_key_interval = f"{avg_key:.4f}" if avg_key else "0.0"
 
-        if profile.get("avg_mouse_speed"):
-            mouse_speed = str(round(profile["avg_mouse_speed"], 2))
+            avg_mouse = profile.get("avg_mouse_speed", 0.0)
+            avg_mouse_speed = f"{avg_mouse:.2f}" if avg_mouse else "0.0"
 
-    # placeholders (you can improve later)
-        keystroke_rhythm = "90"
-        click_frequency = "3.5"
-        anomaly_score = "15"
-        
+            min_key = profile.get("min_key_interval", 0.0)
+            min_key_interval = f"{min_key:.4f}" if min_key else "0.0"
+
+            max_key = profile.get("max_key_interval", 0.0)
+            max_key_interval = f"{max_key:.4f}" if max_key else "0.0"
+
+            key_presses = profile.get("key_presses_count", 0.0)
+            key_presses_count = f"{int(key_presses)}" if key_presses else "0"
+
+            min_mouse = profile.get("min_mouse_speed", 0.0)
+            min_mouse_speed = f"{min_mouse:.2f}" if min_mouse else "0.0"
+
+            max_mouse = profile.get("max_mouse_speed", 0.0)
+            max_mouse_speed = f"{max_mouse:.2f}" if max_mouse else "0.0"
+
+            mouse_moves = profile.get("mouse_moves_count", 0.0)
+            mouse_moves_count = f"{int(mouse_moves)}" if mouse_moves else "0"
+
+            download = profile.get("download_bytes", 0.0)
+            download_bytes = f"{download:.1f}" if download else "0.0"
+
+            upload = profile.get("upload_bytes", 0.0)
+            upload_bytes = f"{upload:.1f}" if upload else "0.0"
+
+            active_application = profile.get("active_application", "Unknown")
+            window_title = profile.get("window_title", "Unknown")
+            if len(window_title) > 25:
+                window_title = window_title[:22] + "..."
+
+        self.metric_widgets = {}
 
         # ========= Row 1 =========
         row1 = QHBoxLayout()
         row1.setSpacing(18)
-        row1.addWidget(
-            MetricWidget(
-                "Typing Speed",
-                typing_speed,
-                "WPM",
-                "Words Per Minute",
-                85,
-                "+2.3%"
-                )
-            )
-        
-        row1.addWidget(
-            MetricWidget(
-                "Mouse Speed",
-                mouse_speed,
-                "px/s",
-                "Pixels/Second",
-                60,
-                "-0.8%"
-                )
-            )
-        row1.addWidget(
-            MetricWidget(
-                "Keystroke Rhythm",
-                keystroke_rhythm,
-                "%",
-                "Consistency Score",
-                92,
-                "+1.5%"
-                )
-            )
-        
-        row1.addWidget(
-            MetricWidget(
-                "Click Frequency",
-                click_frequency,
-                "c/m",
-                "Clicks/Minute",
-                75,
-                "-0.3%"
-                )
-            )
+        self.metric_widgets["avg_key_interval"] = MetricWidget(
+            "avg_key_interval", avg_key_interval, "s", "Average Key Interval", 0
+        )
+        self.metric_widgets["avg_mouse_speed"] = MetricWidget(
+            "avg_mouse_speed", avg_mouse_speed, "px/s", "Average Mouse Speed", 0
+        )
+        self.metric_widgets["min_key_interval"] = MetricWidget(
+            "min_key_interval", min_key_interval, "s", "Minimum Key Interval", 0
+        )
+        self.metric_widgets["max_key_interval"] = MetricWidget(
+            "max_key_interval", max_key_interval, "s", "Maximum Key Interval", 0
+        )
+        row1.addWidget(self.metric_widgets["avg_key_interval"])
+        row1.addWidget(self.metric_widgets["avg_mouse_speed"])
+        row1.addWidget(self.metric_widgets["min_key_interval"])
+        row1.addWidget(self.metric_widgets["max_key_interval"])
         dashboard_layout.addLayout(row1)
         
         # ========= Row 2 =========
         row2 = QHBoxLayout()
         row2.setSpacing(18)
-        row2.addWidget(
-            MetricWidget(
-                "App Focus Time",
-                app_focus_time,
-                "hrs",
-                "Hours/Day",
-                63,
-                "+0.5%"
-                )
-            )
-        row2.addWidget(
-            MetricWidget(
-            "Login Time",
-            login_time,
-            "",
-            "Avg. Morning Login",
-            0,
-            ""
-            )
-            )
-        row2.addWidget(
-            MetricWidget(
-            "Session Length",
-            session_length,
-            "hrs",
-            "Hours",
-            0,
-            ""
-            )
-            )
-        row2.addWidget(
-            MetricWidget(
-            "Anomaly Score",
-            anomaly_score,
-            "%",
-            "Risk Level",
-            15,
-            "-2.1%"
-            )
-            )
+        self.metric_widgets["key_presses_count"] = MetricWidget(
+            "key_presses_count", key_presses_count, "keys", "Total Key Presses", 0
+        )
+        self.metric_widgets["min_mouse_speed"] = MetricWidget(
+            "min_mouse_speed", min_mouse_speed, "px/s", "Minimum Mouse Speed", 0
+        )
+        self.metric_widgets["max_mouse_speed"] = MetricWidget(
+            "max_mouse_speed", max_mouse_speed, "px/s", "Maximum Mouse Speed", 0
+        )
+        self.metric_widgets["mouse_moves_count"] = MetricWidget(
+            "mouse_moves_count", mouse_moves_count, "moves", "Total Mouse Moves", 0
+        )
+        row2.addWidget(self.metric_widgets["key_presses_count"])
+        row2.addWidget(self.metric_widgets["min_mouse_speed"])
+        row2.addWidget(self.metric_widgets["max_mouse_speed"])
+        row2.addWidget(self.metric_widgets["mouse_moves_count"])
         dashboard_layout.addLayout(row2)
-        
-        
         
         # ========= Row 3 =========
         row3 = QHBoxLayout()
         row3.setSpacing(18)
-
-        row3.addWidget(
-            MetricWidget(
-                "File Access Rate",
-                file_access,
-                "files/h",
-                "Files/Hour",
-                0,
-                ""
-                )
-            )
-
-        row3.addWidget(
-            MetricWidget(
-            "Network Traffic",
-            network_traffic,
-            "MB/m",
-            "MB/Minute",
-            0,
-            ""
-            )
-            )
-
-        row3.addWidget(
-            MetricWidget(
-                "Error Rate",
-                error_rate,
-                "%",
-                "System Errors",
-                1,
-                ""
-                )
-            )
-
-        row3.addWidget(
-            MetricWidget(
-                "Threats Detected",
-                threats,
-                "",
-                "Active Alerts",
-                0,
-                ""
-                )
-            )
+        self.metric_widgets["download_bytes"] = MetricWidget(
+            "download_bytes", download_bytes, "bytes", "Downloaded Data Size", 0
+        )
+        self.metric_widgets["upload_bytes"] = MetricWidget(
+            "upload_bytes", upload_bytes, "bytes", "Uploaded Data Size", 0
+        )
+        self.metric_widgets["active_application"] = MetricWidget(
+            "active_application", active_application, "", "Focus App Name", 0
+        )
+        self.metric_widgets["window_title"] = MetricWidget(
+            "window_title", window_title, "", "Focus Window Title", 0
+        )
+        row3.addWidget(self.metric_widgets["download_bytes"])
+        row3.addWidget(self.metric_widgets["upload_bytes"])
+        row3.addWidget(self.metric_widgets["active_application"])
+        row3.addWidget(self.metric_widgets["window_title"])
         dashboard_layout.addLayout(row3)
+
 
         # ========= Chart Section =========
         chart_title = QLabel("PERFORMANCE ANALYSIS")
@@ -623,6 +571,10 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.activity_menu)
         main_layout.addWidget(self.support_menu)
         main_layout.addWidget(self.content_area)
+
+        # Prompt training check on startup
+        QTimer.singleShot(1000, self.check_and_prompt_training)
+
 
     def toggle_profile_menu(self):
         if self.profile_menu.isVisible():
@@ -738,6 +690,79 @@ class MainWindow(QMainWindow):
 
     def get_current_time(self):
         return datetime.now().strftime("%H:%M:%S")
+
+    def update_dashboard_metrics(self):
+        self.user_data = self.dashboard_service.get_profile()
+        if not self.user_data:
+            return
+
+        profile = self.user_data
+        
+        # Row 1
+        avg_key = profile.get("avg_key_interval", 0.0)
+        self.metric_widgets["avg_key_interval"].update_value(f"{avg_key:.4f}" if avg_key else "0.0")
+        
+        avg_mouse = profile.get("avg_mouse_speed", 0.0)
+        self.metric_widgets["avg_mouse_speed"].update_value(f"{avg_mouse:.2f}" if avg_mouse else "0.0")
+        
+        min_key = profile.get("min_key_interval", 0.0)
+        self.metric_widgets["min_key_interval"].update_value(f"{min_key:.4f}" if min_key else "0.0")
+        
+        max_key = profile.get("max_key_interval", 0.0)
+        self.metric_widgets["max_key_interval"].update_value(f"{max_key:.4f}" if max_key else "0.0")
+
+        # Row 2
+        key_presses = profile.get("key_presses_count", 0.0)
+        self.metric_widgets["key_presses_count"].update_value(f"{int(key_presses)}" if key_presses else "0")
+        
+        min_mouse = profile.get("min_mouse_speed", 0.0)
+        self.metric_widgets["min_mouse_speed"].update_value(f"{min_mouse:.2f}" if min_mouse else "0.0")
+        
+        max_mouse = profile.get("max_mouse_speed", 0.0)
+        self.metric_widgets["max_mouse_speed"].update_value(f"{max_mouse:.2f}" if max_mouse else "0.0")
+        
+        mouse_moves = profile.get("mouse_moves_count", 0.0)
+        self.metric_widgets["mouse_moves_count"].update_value(f"{int(mouse_moves)}" if mouse_moves else "0")
+
+        # Row 3
+        download = profile.get("download_bytes", 0.0)
+        self.metric_widgets["download_bytes"].update_value(f"{download:.1f}" if download else "0.0")
+        
+        upload = profile.get("upload_bytes", 0.0)
+        self.metric_widgets["upload_bytes"].update_value(f"{upload:.1f}" if upload else "0.0")
+        
+        active_app = profile.get("active_application", "Unknown")
+        self.metric_widgets["active_application"].update_value(active_app)
+        
+        win_title = profile.get("window_title", "Unknown")
+        if len(win_title) > 25:
+            win_title = win_title[:22] + "..."
+        self.metric_widgets["window_title"].update_value(win_title)
+
+    def check_and_prompt_training(self):
+        is_trained = False
+        user_id = None
+        if self.user_data:
+            is_trained = self.user_data.get("is_trained", False)
+            user_id = self.user_data.get("user_id")
+
+        if not is_trained:
+            from PyQt5.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                self,
+                "SentinelX - Allow Training",
+                "Welcome to SentinelX! We detected that your behavioral security profile has not been trained yet.\n\nWould you like to start the training now to establish your unique behavioral fingerprint?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            if reply == QMessageBox.Yes:
+                self.run_training_flow(user_id)
+
+    def run_training_flow(self, user_id):
+        dialog = TrainingDialog(self.token, user_id, self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.update_dashboard_metrics()
+
 
 
 if __name__ == "__main__":

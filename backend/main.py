@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime, timedelta
 from uuid import uuid4
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
+import bcrypt
 from typing import Literal
 import os
 import hashlib
@@ -173,15 +173,19 @@ def get_admin_user(current_user: User = Depends(get_current_user)):
 # ==============================
 # Password Hashing
 # ==============================
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 def hash_password(password: str):
-    return pwd_context.hash(password)
+    pwd_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(pwd_bytes, salt)
+    return hashed.decode('utf-8')
 
 def verify_password(plain_password, hashed_password):
     if not hashed_password:
         return False
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except Exception:
+        return False
 
 # ==============================
 # Schemas
@@ -390,32 +394,70 @@ def upload_fingerprint(
     except Exception as e:
         return {"error": str(e)}
 
-    avg_key = float(data.get("avg_key_interval", 0))
-    avg_mouse = float(data.get("avg_mouse_speed", 0))
+    avg_key = float(data.get("avg_key_interval_mean", 0))
+    avg_mouse = float(data.get("avg_mouse_speed_mean", 0))
+    min_key = float(data.get("min_key_interval_mean", 0))
+    max_key = float(data.get("max_key_interval_mean", 0))
+    key_presses = float(data.get("key_presses_count_mean", 0))
+    min_mouse = float(data.get("min_mouse_speed_mean", 0))
+    max_mouse = float(data.get("max_mouse_speed_mean", 0))
+    mouse_moves = float(data.get("mouse_moves_count_mean", 0))
+    download = float(data.get("download_bytes_mean", 0))
+    upload = float(data.get("upload_bytes_mean", 0))
+    active_app = data.get("active_application", "Unknown")
+    win_title = data.get("window_title", "Unknown")
     country = data.get("country", "Unknown")
+    city = data.get("city", "Unknown")
 
     user_id = str(current_user.id)
     profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
     if profile:
         profile.avg_key_interval = avg_key
         profile.avg_mouse_speed = avg_mouse
-        profile.total_samples = 1
+        profile.min_key_interval = min_key
+        profile.max_key_interval = max_key
+        profile.key_presses_count = key_presses
+        profile.min_mouse_speed = min_mouse
+        profile.max_mouse_speed = max_mouse
+        profile.mouse_moves_count = mouse_moves
+        profile.download_bytes = download
+        profile.upload_bytes = upload
+        profile.active_application = active_app
+        profile.window_title = win_title
+        profile.total_samples = 100
         profile.country = country
+        profile.city = city
     else:
         profile = UserProfile(
             user_id=user_id,
             avg_key_interval=avg_key,
             avg_mouse_speed=avg_mouse,
-            total_samples=1,
-            country=country
+            min_key_interval=min_key,
+            max_key_interval=max_key,
+            key_presses_count=key_presses,
+            min_mouse_speed=min_mouse,
+            max_mouse_speed=max_mouse,
+            mouse_moves_count=mouse_moves,
+            download_bytes=download,
+            upload_bytes=upload,
+            active_application=active_app,
+            window_title=win_title,
+            total_samples=100,
+            country=country,
+            city=city
         )
         db.add(profile)
+    
+    current_user.is_trained = True
+    current_user.last_training_date = datetime.utcnow()
+    current_user.training_samples = 100
     db.commit()
     return {
         "message": "Fingerprint uploaded successfully",
         "avg_key_interval": avg_key,
         "avg_mouse_speed": avg_mouse
     }
+
 
 # ==================================
 # ONBOARDING TRAINING COLLECTOR TASK
@@ -840,16 +882,31 @@ def latest_threats(db: Session = Depends(get_db)):
         RiskLog.timestamp.desc()
     ).limit(10).all()
 
-    return [
-        {
+    result = []
+    for log in logs:
+        user = db.query(User).filter(User.id == log.user_id).first()
+        profile = db.query(UserProfile).filter(UserProfile.user_id == log.user_id).first()
+        
+        # Resolve IP address from user profile
+        ip_addr = "Unknown"
+        if profile:
+            ip_addr = profile.public_ip or profile.ip_address or "Unknown"
+            
+        result.append({
             "user_id": log.user_id,
             "risk_score": log.risk_score,
             "status": log.status,
             "alerts": log.alerts,
-            "timestamp": log.timestamp
-        }
-        for log in logs
-    ]
+            "timestamp": log.timestamp,
+            "city": log.city or (user.city if user else "Unknown"),
+            "country": log.country or (user.country if user else "Unknown"),
+            "first_name": user.first_name if user else "Unknown",
+            "last_name": user.last_name if user else "User",
+            "email": user.email if user else "Unknown",
+            "department": user.department if user else "N/A",
+            "ip_address": ip_addr
+        })
+    return result
 
 # ==================================
 # TOP RISK USERS
@@ -902,6 +959,13 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
     hashed_pw = hash_password(user.password)
 
+    # Normalize role/account_type
+    raw_role = (user.account_type or "").strip().lower()
+    if raw_role in ("admin", "administrator"):
+        role_mapped = "Administrator"
+    else:
+        role_mapped = "Standard User"
+
     new_user = User(
         first_name=user.first_name,
         last_name=user.last_name,
@@ -911,7 +975,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
         country=country,
         gender=user.gender,
         department=user.department,
-        account_type=user.account_type,
+        account_type=role_mapped,
         is_oauth=False
     )
 
@@ -1043,8 +1107,17 @@ def run_migrations():
             ("public_ip", "VARCHAR"),
             ("network_ssid", "VARCHAR"),
             ("download_bytes", "FLOAT DEFAULT 0.0"),
-            ("upload_bytes", "FLOAT DEFAULT 0.0")
+            ("upload_bytes", "FLOAT DEFAULT 0.0"),
+            ("min_key_interval", "FLOAT DEFAULT 0.0"),
+            ("max_key_interval", "FLOAT DEFAULT 0.0"),
+            ("key_presses_count", "FLOAT DEFAULT 0.0"),
+            ("min_mouse_speed", "FLOAT DEFAULT 0.0"),
+            ("max_mouse_speed", "FLOAT DEFAULT 0.0"),
+            ("mouse_moves_count", "FLOAT DEFAULT 0.0"),
+            ("active_application", "VARCHAR DEFAULT 'Unknown'"),
+            ("window_title", "VARCHAR DEFAULT 'Unknown'")
         ]
+
         for col, col_type in profile_cols:
             try:
                 db.execute(text(f"ALTER TABLE user_profiles ADD COLUMN {col} {col_type}"))
@@ -1240,6 +1313,26 @@ def get_user_logs(
 
     return logs
 
+@app.get("/admin/all-logs")
+def get_all_logs(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    logs = db.query(SecurityLog).order_by(SecurityLog.timestamp.desc()).limit(100).all()
+    result = []
+    for log in logs:
+        user = db.query(User).filter(User.id == log.user_id).first()
+        result.append({
+            "id": log.id,
+            "user_id": log.user_id,
+            "user_name": f"{user.first_name} {user.last_name}" if user else "System",
+            "email": user.email if user else "N/A",
+            "action": log.action,
+            "details": log.details,
+            "timestamp": log.timestamp
+        })
+    return result
+
 @app.post("/admin/unfreeze/{user_id}")
 def unfreeze_user(
     user_id: str,
@@ -1257,6 +1350,27 @@ def unfreeze_user(
     logger.info(f"[ADMIN_ACTION] Admin {admin.id} unfroze user {user_id}")
 
     return {"message": "User unfrozen successfully"}
+
+@app.post("/admin/freeze/{user_id}")
+def freeze_user(
+    user_id: str,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    user_id = str(user_id)
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.is_frozen = True
+    user.risk_state = "frozen"
+    db.commit()
+    revoke_user_tokens(user_id)
+    logger.info(f"[ADMIN_ACTION] Admin {admin.id} manually froze user {user_id}")
+
+    return {"message": "User frozen successfully"}
+
 
 @app.post("/admin/unblock/{user_id}")
 def unblock_user(user_id: str):
@@ -1283,7 +1397,19 @@ def get_user_profile(
         "account_type": current_user.account_type,
         "city": current_user.city,
         "country": current_user.country,
+        "is_trained": current_user.is_trained,
+        "user_id": str(current_user.id),
         "avg_key_interval": profile.avg_key_interval if profile else 0.0,
         "avg_mouse_speed": profile.avg_mouse_speed if profile else 0.0,
+        "min_key_interval": profile.min_key_interval if (profile and hasattr(profile, 'min_key_interval')) else 0.0,
+        "max_key_interval": profile.max_key_interval if (profile and hasattr(profile, 'max_key_interval')) else 0.0,
+        "key_presses_count": profile.key_presses_count if (profile and hasattr(profile, 'key_presses_count')) else 0.0,
+        "min_mouse_speed": profile.min_mouse_speed if (profile and hasattr(profile, 'min_mouse_speed')) else 0.0,
+        "max_mouse_speed": profile.max_mouse_speed if (profile and hasattr(profile, 'max_mouse_speed')) else 0.0,
+        "mouse_moves_count": profile.mouse_moves_count if (profile and hasattr(profile, 'mouse_moves_count')) else 0.0,
+        "download_bytes": profile.download_bytes if profile else 0.0,
+        "upload_bytes": profile.upload_bytes if profile else 0.0,
+        "active_application": profile.active_application if (profile and hasattr(profile, 'active_application')) else "Unknown",
+        "window_title": profile.window_title if (profile and hasattr(profile, 'window_title')) else "Unknown",
         "total_samples": profile.total_samples if profile else 0
-    }
+    }

@@ -484,7 +484,7 @@ class RegisterPage(QMainWindow):
                 border: none;
                 background: rgba(0, 10, 20, 0.3);
                 width: 8px;
-                margin: 0px;حغ
+                margin: 0px;
                 border-radius: 4px;
             }
             QScrollBar::handle:vertical {
@@ -751,10 +751,10 @@ class RegisterPage(QMainWindow):
 
         city = parts[0] if len(parts) > 0 else ""
         country = parts[1] if len(parts) > 1 else ""
-        
-        full_name = f"{first_name} {last_name}"
 
         url = "http://127.0.0.1:8000/register"
+
+        role_text = "Administrator" if self.selected_role == "admin" else "Standard User"
 
         data = {
             "first_name": first_name,
@@ -762,11 +762,11 @@ class RegisterPage(QMainWindow):
             "email": email,
             "password": password,
             "confirm_password": confirm,
-            "city": location.split(",")[0].strip(),
-            "country": location.split(",")[1].strip() if "," in location else "",
+            "city": city,
+            "country": country,
             "gender": gender,
             "department": department,
-            "account_type": self.selected_role
+            "account_type": role_text
         }
 
         try:
@@ -779,8 +779,6 @@ class RegisterPage(QMainWindow):
         except Exception as e:
             QMessageBox.warning(self, "Error", str(e))
             return
-
-        # role_text = "Administrator" if self.selected_role == "admin" else "Standard User"
         
         
         self.first_name_input.clear()

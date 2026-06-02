@@ -45,6 +45,16 @@ class UserProfile(Base):
     upload_bytes = Column(Float, default=0.0)
     total_samples = Column(Integer)
 
+    min_key_interval = Column(Float, default=0.0)
+    max_key_interval = Column(Float, default=0.0)
+    key_presses_count = Column(Float, default=0.0)
+    min_mouse_speed = Column(Float, default=0.0)
+    max_mouse_speed = Column(Float, default=0.0)
+    mouse_moves_count = Column(Float, default=0.0)
+    active_application = Column(String, default="Unknown")
+    window_title = Column(String, default="Unknown")
+
+
 
 class RiskLog(Base):
     __tablename__ = "risk_logs"

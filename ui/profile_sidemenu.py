@@ -416,7 +416,7 @@ class ProfileSideMenu(QFrame):
         self.raise_()
         parent = self.parent()
         if parent:
-            sidebar_width = 90
+            sidebar_width = getattr(parent, 'sidebar_width', 90)
             self.animation = QPropertyAnimation(self, b"pos")
             self.animation.setDuration(280)
             self.animation.setEasingCurve(QEasingCurve.OutCubic)
@@ -427,7 +427,7 @@ class ProfileSideMenu(QFrame):
     def hide_menu(self):
         parent = self.parent()
         if parent:
-            sidebar_width = 90
+            sidebar_width = getattr(parent, 'sidebar_width', 90)
             self.animation = QPropertyAnimation(self, b"pos")
             self.animation.setDuration(260)
             self.animation.setEasingCurve(QEasingCurve.OutCubic)

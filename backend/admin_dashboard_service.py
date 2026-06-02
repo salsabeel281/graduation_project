@@ -55,3 +55,22 @@ class AdminDashboardService:
         except Exception as e:
             print("unfreeze_user error:", e)
             return False
+
+    def freeze_user(self, user_id):
+        try:
+            r = requests.post(
+                f"{self.base_url}/admin/freeze/{user_id}",
+                headers=self.headers
+            )
+            return r.status_code == 200
+        except Exception as e:
+            print("freeze_user error:", e)
+            return False
+
+    def get_all_logs(self):
+        try:
+            r = requests.get(f"{self.base_url}/admin/all-logs", headers=self.headers)
+            return r.json() if r.status_code == 200 else []
+        except Exception as e:
+            print("get_all_logs error:", e)
+            return []
