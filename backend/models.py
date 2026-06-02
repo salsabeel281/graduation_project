@@ -10,9 +10,18 @@ class BehaviorRecord(Base):
     user_id = Column(String, index=True)
     session_id = Column(String)
     avg_key_interval = Column(Float)
+    typing_variance = Column(Float, default=0.0)
     avg_mouse_speed = Column(Float)
+    mouse_acceleration = Column(Float, default=0.0)
+    active_app_patterns = Column(String)  # Stored active app
+    session_duration = Column(Float, default=0.0)
     city = Column(String)
     country = Column(String)
+    ip_address = Column(String)
+    public_ip = Column(String)
+    network_ssid = Column(String)
+    download_bytes = Column(Float, default=0.0)
+    upload_bytes = Column(Float, default=0.0)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
 
@@ -22,9 +31,19 @@ class UserProfile(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(String, unique=True, index=True)
     avg_key_interval = Column(Float)
+    typing_variance = Column(Float, default=0.0)
     avg_mouse_speed = Column(Float)
+    mouse_acceleration = Column(Float, default=0.0)
+    active_app_patterns = Column(String)  # JSON-serialized app pattern frequencies
+    session_duration = Column(Float, default=0.0)
+    city = Column(String)
+    country = Column(String)
+    ip_address = Column(String)
+    public_ip = Column(String)
+    network_ssid = Column(String)
+    download_bytes = Column(Float, default=0.0)
+    upload_bytes = Column(Float, default=0.0)
     total_samples = Column(Integer)
-    country = Column(String)   # ✅ HERE (correct)
 
 
 class RiskLog(Base):
@@ -59,9 +78,19 @@ class User(Base):
     department = Column(String)
     account_type = Column(String)
     is_frozen = Column(Boolean, default=False)
-    first_login = Column(DateTime, nullable=True)  # ← Add this line
+    first_login = Column(DateTime, nullable=True)
+    risk_state = Column(String, default="active")
 
-    
+    # ML Training progress fields
+    is_trained = Column(Boolean, default=False)
+    training_samples = Column(Integer, default=0)
+    last_training_date = Column(DateTime, nullable=True)
+    model_version = Column(Integer, default=1)
+
+    # OAuth fields
+    is_oauth = Column(Boolean, default=False)
+    oauth_provider = Column(String, nullable=True)
+
 
 class Notification(Base):
     __tablename__ = "notifications"
@@ -80,3 +109,4 @@ class SecurityLog(Base):
     action = Column(String)
     details = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)
+

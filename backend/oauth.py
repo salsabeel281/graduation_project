@@ -79,7 +79,9 @@ def google_callback(code: str, db: Session = Depends(get_db)):
             email=email,
             first_name=name.split(" ")[0],
             last_name=" ".join(name.split(" ")[1:]) if " " in name else "",
-            hashed_password="google_auth"
+            hashed_password=None,
+            is_oauth=True,
+            oauth_provider="google"
         )
         db.add(db_user)
         db.commit()
@@ -159,7 +161,9 @@ def github_callback(code: str, db: Session = Depends(get_db)):
             email=email,
             first_name=name,
             last_name="",
-            hashed_password="github_auth"
+            hashed_password=None,
+            is_oauth=True,
+            oauth_provider="github"
         )
         db.add(db_user)
         db.commit()

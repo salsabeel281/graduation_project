@@ -484,7 +484,7 @@ class RegisterPage(QMainWindow):
                 border: none;
                 background: rgba(0, 10, 20, 0.3);
                 width: 8px;
-                margin: 0px;
+                margin: 0px;حغ
                 border-radius: 4px;
             }
             QScrollBar::handle:vertical {

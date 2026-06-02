@@ -1,0 +1,11 @@
+
+
+
+uvicorn backend.main:app --reload
+
+
+
+python main.py
+
+
+
